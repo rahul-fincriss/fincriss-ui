@@ -11,6 +11,7 @@ import DashboardPage from "./pages/DashboardPage";
 import AlertWorkbenchPage from "./pages/AlertWorkbenchPage";
 import AlertDetailsPage from "./pages/AlertDetailsPage";
 import TriageQueuePage from "./pages/TriageQueuePage";
+import STRReviewQueuePage from "./pages/STRReviewQueuePage";
 import CasesPage from "./pages/CasesPage";
 import CaseWorkspacePage from "./pages/CaseWorkspacePage";
 import AuditTrailPage from "./pages/AuditTrailPage";
@@ -47,9 +48,7 @@ function AppRoutes() {
       <Route path="/customers" element={<ProtectedRoute><Customer360Page /></ProtectedRoute>} />
       <Route path="/cases" element={<ProtectedRoute><CasesPage /></ProtectedRoute>} />
       <Route path="/cases/:caseId" element={<ProtectedRoute><CaseWorkspacePage /></ProtectedRoute>} />
-      {/* Redirect legacy STR routes to Cases */}
-      <Route path="/str" element={<Navigate to="/cases" replace />} />
-      <Route path="/str/*" element={<Navigate to="/cases" replace />} />
+      <Route path="/str" element={<ProtectedRoute><STRReviewQueuePage /></ProtectedRoute>} />
       <Route path="/audit" element={<ProtectedRoute><AuditTrailPage /></ProtectedRoute>} />
       <Route path="/ml-status" element={<ProtectedRoute><MLModelStatusPage /></ProtectedRoute>} />
       {/* Redirect legacy routes */}

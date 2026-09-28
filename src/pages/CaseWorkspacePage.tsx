@@ -35,10 +35,10 @@ import { useCase, useUpdateCase, useCloseCase, useAddCaseNote, useUploadEvidence
 import { Loader2, AlertCircle } from 'lucide-react';
 import { useRef } from 'react';
 
-// Evidence upload is wired end-to-end (register → presigned S3 PUT) but disabled
-// until the backend AWS credentials are valid and the S3 bucket has a CORS policy
-// allowing browser PUT from the app origin. See IMPLEMENTATION_PLAN.md (Phase 3).
-const EVIDENCE_UPLOAD_ENABLED = false;
+// Evidence upload: register → presigned S3 PUT. Enabled 2026-09-29 once the
+// backend AWS creds were restored and a CORS policy was set on the bucket
+// (PUT/GET/HEAD from app.fincriss.com). See IMPLEMENTATION_PLAN.md (Phase 3).
+const EVIDENCE_UPLOAD_ENABLED = true;
 
 export default function CaseWorkspacePage() {
   const { caseId } = useParams();

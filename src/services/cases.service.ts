@@ -74,9 +74,9 @@ export const casesService = {
       })),
       documents: (c.documents || c.evidence || []).map((d: any) => ({
         id: String(d.id || Math.random()),
-        name: d.name || d.filename || 'Document',
+        name: d.file_name || d.name || d.filename || 'Document',
         type: d.type || d.file_type || 'file',
-        uploadedBy: d.uploaded_by || d.uploadedBy || 'Unknown',
+        uploadedBy: d.full_name || d.username || d.uploaded_by || d.uploadedBy || 'Unknown',
         uploadedAt: new Date(d.uploaded_at || d.created_at || Date.now()),
         url: d.url || d.file_url || '#',
       })),

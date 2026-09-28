@@ -31,25 +31,41 @@ import { formatINRFull } from '@/lib/formatters';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
-import { useCase, useUpdateCase, useCloseCase } from '@/hooks/useCases';
+import { useCase, useUpdateCase, useCloseCase, useAddCaseNote, useUploadEvidence } from '@/hooks/useCases';
 import { Loader2, AlertCircle } from 'lucide-react';
+import { useRef } from 'react';
+
+// Evidence upload: register → presigned S3 PUT. Enabled 2026-09-29 once the
+// backend AWS creds were restored and a CORS policy was set on the bucket
+// (PUT/GET/HEAD from app.fincriss.com). See IMPLEMENTATION_PLAN.md (Phase 3).
+const EVIDENCE_UPLOAD_ENABLED = true;
 
 export default function CaseWorkspacePage() {
   const { caseId } = useParams();
   const navigate = useNavigate();
   const [newNote, setNewNote] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Real API data
   const { data: caseData, isLoading, error } = useCase(caseId || '');
   const updateCaseMutation = useUpdateCase();
   const closeCaseMutation = useCloseCase();
+  const addNoteMutation = useAddCaseNote();
+  const uploadEvidenceMutation = useUploadEvidence();
 
   const handleAddNote = () => {
     if (!newNote.trim() || !caseId) return;
-    
-    // In a real app we'd call an API to add a note
-    toast.success('Note added successfully');
-    setNewNote('');
+    addNoteMutation.mutate(
+      { caseId, note: newNote.trim() },
+      { onSuccess: () => setNewNote('') }
+    );
+  };
+
+  const handleEvidenceSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !caseId) return;
+    uploadEvidenceMutation.mutate({ caseId, file });
+    e.target.value = ''; // allow re-selecting the same file
   };
 
   const handleCloseCase = () => {
@@ -255,10 +271,25 @@ export default function CaseWorkspacePage() {
                   <CardTitle className="text-lg">Documents & Evidence</CardTitle>
                   <CardDescription>Uploaded supporting documentation</CardDescription>
                 </div>
-                <Button variant="outline" size="sm">
-                  <Upload className="mr-2 h-4 w-4" />
-                  Upload Document
-                </Button>
+                {EVIDENCE_UPLOAD_ENABLED && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadEvidenceMutation.isPending}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {uploadEvidenceMutation.isPending ? 'Uploading…' : 'Upload Document'}
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={handleEvidenceSelected}
+                    />
+                  </>
+                )}
               </CardHeader>
               <CardContent>
                 {caseData.documents.length === 0 ? (
@@ -462,9 +493,9 @@ export default function CaseWorkspacePage() {
                     onChange={(e) => setNewNote(e.target.value)}
                     className="min-h-[100px]"
                   />
-                  <Button onClick={handleAddNote}>
+                  <Button onClick={handleAddNote} disabled={!newNote.trim() || addNoteMutation.isPending}>
                     <PlusCircle className="mr-2 h-4 w-4" />
-                    Add Note
+                    {addNoteMutation.isPending ? 'Adding…' : 'Add Note'}
                   </Button>
               </div>
             </CardContent>

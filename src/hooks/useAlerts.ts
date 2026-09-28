@@ -176,3 +176,26 @@ export function useWorkload() {
     queryFn: () => alertsService.getWorkload(),
   });
 }
+
+// ── Alert notes ──────────────────────────────────────────────────────────────
+
+export function useAlertNotes(alertId: string) {
+  return useQuery({
+    queryKey: ['alert-notes', alertId],
+    queryFn: () => alertsService.getNotes(alertId),
+    enabled: !!alertId,
+  });
+}
+
+export function useAddAlertNote() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ alertId, note }: { alertId: string; note: string }) =>
+      alertsService.addNote(alertId, note),
+    onSuccess: (_, { alertId }) => {
+      queryClient.invalidateQueries({ queryKey: ['alert-notes', alertId] });
+      toast.success('Note added');
+    },
+    onError: (error: any) => toast.error(extractErrorMessage(error, 'Failed to add note')),
+  });
+}

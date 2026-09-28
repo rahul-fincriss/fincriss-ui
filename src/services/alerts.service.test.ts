@@ -73,3 +73,18 @@ describe('triage actions', () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+describe('alert notes', () => {
+  it('getNotes unwraps the {notes} envelope', async () => {
+    mockGet.mockResolvedValueOnce({ data: { alert_id: 'A', notes: [{ id: 1, note: 'hi' }] } });
+    const rows = await alertsService.getNotes('A');
+    expect(mockGet).toHaveBeenCalledWith('/api/alerts/A/notes');
+    expect(rows).toHaveLength(1);
+  });
+
+  it('addNote POSTs the note body', async () => {
+    mockPost.mockResolvedValueOnce({ data: { id: 2, note: 'flagged' } });
+    await alertsService.addNote('A', 'flagged');
+    expect(mockPost).toHaveBeenCalledWith('/api/alerts/A/notes', { note: 'flagged' });
+  });
+});

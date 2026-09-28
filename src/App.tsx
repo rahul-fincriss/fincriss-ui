@@ -10,6 +10,7 @@ import DashboardPage from "./pages/DashboardPage";
 
 import AlertWorkbenchPage from "./pages/AlertWorkbenchPage";
 import AlertDetailsPage from "./pages/AlertDetailsPage";
+import TriageQueuePage from "./pages/TriageQueuePage";
 import CasesPage from "./pages/CasesPage";
 import CaseWorkspacePage from "./pages/CaseWorkspacePage";
 import AuditTrailPage from "./pages/AuditTrailPage";
@@ -41,6 +42,7 @@ function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       
       <Route path="/alerts/workbench" element={<ProtectedRoute><AlertWorkbenchPage /></ProtectedRoute>} />
+      <Route path="/triage" element={<ProtectedRoute><TriageQueuePage /></ProtectedRoute>} />
       <Route path="/alerts/:alertId" element={<ProtectedRoute><AlertDetailsPage /></ProtectedRoute>} />
       <Route path="/customers" element={<ProtectedRoute><Customer360Page /></ProtectedRoute>} />
       <Route path="/cases" element={<ProtectedRoute><CasesPage /></ProtectedRoute>} />

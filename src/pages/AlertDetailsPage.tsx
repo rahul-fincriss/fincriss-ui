@@ -27,6 +27,7 @@ import { RiskBadge } from '@/components/shared/RiskBadge';
 import { SLATimer } from '@/components/shared/SLATimer';
 import { RawAlertDrawer } from '@/components/workbench/RawAlertDrawer';
 import { Customer360Drawer } from '@/components/customer360/Customer360Drawer';
+import { EntityHistoryCard } from '@/components/shared/EntityHistoryCard';
 import { formatINRFull } from '@/lib/formatters';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
@@ -591,6 +592,11 @@ export default function AlertDetailsPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Activity History */}
+      <div className="mt-6">
+        <EntityHistoryCard entityType="alert" entityId={alert.id} />
       </div>
 
       {/* Raw Alert Drawer */}

@@ -21,34 +21,80 @@ const extractArray = <T>(data: any, keys: string[]): T[] => {
   return [];
 };
 
+// workflow_audit_log returns old_value / new_value as JSONB objects (or null).
+// Render a compact, human-readable summary of what changed.
+const formatValue = (v: unknown): string => {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+};
+
+const summarizeChange = (oldValue: unknown, newValue: unknown): string => {
+  const oldObj =
+    oldValue && typeof oldValue === 'object' ? (oldValue as Record<string, unknown>) : null;
+  const newObj =
+    newValue && typeof newValue === 'object' ? (newValue as Record<string, unknown>) : null;
+
+  if (!oldObj && !newObj) {
+    return [formatValue(oldValue), formatValue(newValue)].filter(Boolean).join(' → ');
+  }
+
+  const keys = Array.from(new Set([...Object.keys(oldObj || {}), ...Object.keys(newObj || {})]));
+  const parts = keys.map((k) => {
+    const before = oldObj ? oldObj[k] : undefined;
+    const after = newObj ? newObj[k] : undefined;
+    if (before !== undefined && after !== undefined && formatValue(before) !== formatValue(after)) {
+      return `${k}: ${formatValue(before)} → ${formatValue(after)}`;
+    }
+    if (after !== undefined) return `${k}: ${formatValue(after)}`;
+    if (before !== undefined) return `${k}: ${formatValue(before)}`;
+    return '';
+  });
+  return parts.filter(Boolean).join('; ');
+};
+
 export const auditService = {
-  // General platform audit logs (alerts, cases, STRs)
+  // General platform audit logs — alert / case / STR / role workflow events.
+  // Backed by workflow_audit_log via GET /api/audit-logs.
   async listLogs(params: any = {}): Promise<AuditEntry[]> {
-    // FALLBACK: Using rules/audit-log because /api/audit-logs is currently failing on the backend
-    const response = await api.get('/api/rules/audit-log', { params });
-    const data = response.data;
-    console.log("auditService.listLogs fallback raw data:", data);
-    
-    const logs = extractArray<any>(data, ['items', 'audit_logs', 'entries', 'logs']);
+    const response = await api.get('/api/audit-logs', { params });
+    const logs = extractArray<any>(response.data, ['logs', 'items', 'audit_logs', 'entries']);
     return logs.map((log: any) => ({
       id: (log.id || log.audit_id || Math.random()).toString(),
-      entityType: log.entity_type || 'alert',
+      entityType: (log.entity_type || 'alert').toLowerCase(),
       entityId: (log.entity_id || '').toString(),
       action: log.action || 'Updated',
-      performedBy: log.performed_by || log.username || 'System',
-      performedAt: new Date(log.performed_at || log.timestamp || Date.now()),
-      details: log.details || log.description || '',
-      modelVersion: log.model_version || log.version,
+      performedBy: log.username || log.performed_by || 'System',
+      performedAt: new Date(log.timestamp || log.performed_at || Date.now()),
+      details: log.details || summarizeChange(log.old_value, log.new_value),
+      modelVersion: log.new_value?.model_version || log.model_version || log.version,
     }));
   },
 
-  // Rule configuration specific audit logs
+  // Full audit history for one entity — GET /api/audit-logs/{entity_type}/{entity_id}.
+  // Used by alert / case detail pages.
+  async getEntityHistory(entityType: string, entityId: string): Promise<AuditEntry[]> {
+    const response = await api.get(
+      `/api/audit-logs/${entityType.toUpperCase()}/${encodeURIComponent(entityId)}`
+    );
+    const logs = extractArray<any>(response.data, ['logs', 'items', 'entries']);
+    return logs.map((log: any) => ({
+      id: (log.id || log.audit_id || Math.random()).toString(),
+      entityType: (log.entity_type || entityType || 'alert').toLowerCase(),
+      entityId: (log.entity_id || entityId || '').toString(),
+      action: log.action || 'Updated',
+      performedBy: log.username || log.performed_by || 'System',
+      performedAt: new Date(log.timestamp || log.performed_at || Date.now()),
+      details: log.details || summarizeChange(log.old_value, log.new_value),
+      modelVersion: log.new_value?.model_version || log.model_version || log.version,
+    }));
+  },
+
+  // Rule configuration specific audit logs — GET /api/rules/audit-log (shape: { total, entries }).
+  // Correctly points at the rules endpoint; do not repoint this one.
   async listRuleAuditLogs(params: any = {}): Promise<any[]> {
     const response = await api.get('/api/rules/audit-log', { params });
-    const data = response.data;
-    console.log("auditService.listRuleAuditLogs raw data:", data);
-    
-    const logs = extractArray<any>(data, ['items', 'audit_logs', 'entries', 'logs']);
+    const logs = extractArray<any>(response.data, ['entries', 'items', 'audit_logs', 'logs']);
     return logs.map((log: any) => ({
       id: (log.id || log.audit_id || Math.random()).toString(),
       ruleId: log.rule_id,
@@ -61,24 +107,28 @@ export const auditService = {
     }));
   },
 
-  // Workforce/Admin audit logs
+  // Workforce / Admin audit logs — user / role / permission / queue events.
+  // Backed by workflow_audit_log; filtered client-side to admin entity types since the
+  // endpoint filters a single entity_type at a time.
   async listAdminLogs(params: any = {}): Promise<AdminAuditEntry[]> {
-    // FALLBACK: Using rules/audit-log because /api/audit-logs is currently failing on the backend
-    const response = await api.get('/api/rules/audit-log', { params });
-    const data = response.data;
-    
-    const logs = extractArray<any>(data, ['items', 'audit_logs', 'entries', 'logs']);
-    return logs.map((log: any) => ({
-      id: (log.id || log.audit_id || Math.random()).toString(),
-      actionType: log.action_type || log.action || 'user_updated',
-      entityType: log.entity_type || 'user',
-      entityId: (log.entity_id || '').toString(),
-      entityName: log.entity_name || (log.entity_id || '').toString(),
-      performedBy: log.performed_by || 'System',
-      performedAt: new Date(log.performed_at || Date.now()),
-      previousValue: log.previous_value,
-      newValue: log.new_value,
-      details: log.details,
-    }));
-  }
+    const response = await api.get('/api/audit-logs', {
+      params: { limit: 100, ...params },
+    });
+    const logs = extractArray<any>(response.data, ['logs', 'items', 'audit_logs', 'entries']);
+    const adminEntities = new Set(['user', 'role', 'permission', 'queue']);
+    return logs
+      .filter((log: any) => adminEntities.has((log.entity_type || '').toLowerCase()))
+      .map((log: any) => ({
+        id: (log.id || log.audit_id || Math.random()).toString(),
+        actionType: (log.action_type || log.action || 'user_updated').toLowerCase(),
+        entityType: (log.entity_type || 'user').toLowerCase(),
+        entityId: (log.entity_id || '').toString(),
+        entityName: (log.entity_name || log.entity_id || '').toString(),
+        performedBy: log.username || log.performed_by || 'System',
+        performedAt: new Date(log.timestamp || log.performed_at || Date.now()),
+        previousValue: formatValue(log.old_value) || undefined,
+        newValue: formatValue(log.new_value) || undefined,
+        details: log.details || summarizeChange(log.old_value, log.new_value),
+      }));
+  },
 };

@@ -180,9 +180,10 @@ export function AdminAuditLog() {
                     <TableCell>
                       <Badge
                         variant="secondary"
-                        className={actionTypeColors[entry.actionType]}
+                        className={actionTypeColors[entry.actionType] || 'bg-muted text-muted-foreground'}
                       >
-                        {actionTypeLabels[entry.actionType]}
+                        {actionTypeLabels[entry.actionType] ||
+                          entry.actionType.replace(/_/g, ' ')}
                       </Badge>
                     </TableCell>
                     <TableCell>

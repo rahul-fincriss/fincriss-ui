@@ -7,6 +7,7 @@ import {
   FolderOpen,
   History,
   LayoutDashboard,
+  Inbox,
   Server,
   Settings,
   Shield,
@@ -53,6 +54,12 @@ const navItems: NavItem[] = [
     icon: Zap,
     roles: ['analyst', 'investigator', 'super_admin'],
     badge: '12',
+  },
+  {
+    title: 'Triage Queue',
+    url: '/triage',
+    icon: Inbox,
+    roles: ['triage_manager', 'investigator', 'super_admin'],
   },
   {
     title: 'Customer 360',

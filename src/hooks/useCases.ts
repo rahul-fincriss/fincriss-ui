@@ -64,9 +64,9 @@ export function useAttachAlertToCase() {
 
 export function useCloseCase() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: ({ caseId, notes }: { caseId: string; notes: string }) => 
+    mutationFn: ({ caseId, notes }: { caseId: string; notes: string }) =>
       casesService.closeCase(caseId, notes),
     onSuccess: (_, { caseId }) => {
       queryClient.invalidateQueries({ queryKey: ['cases'] });
@@ -77,5 +77,40 @@ export function useCloseCase() {
       console.error('Failed to close case:', error);
       toast.error(error.response?.data?.detail || 'Failed to close case');
     }
+  });
+}
+
+export function useAddCaseNote() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ caseId, note }: { caseId: string; note: string }) =>
+      casesService.addNote(caseId, note),
+    onSuccess: (_, { caseId }) => {
+      queryClient.invalidateQueries({ queryKey: ['case', caseId] });
+      queryClient.invalidateQueries({ queryKey: ['entity-history', 'case', caseId] });
+      toast.success('Note added');
+    },
+    onError: (error: any) => {
+      console.error('Failed to add note:', error);
+      toast.error(error.response?.data?.detail || 'Failed to add note');
+    },
+  });
+}
+
+export function useUploadEvidence() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ caseId, file }: { caseId: string; file: File }) =>
+      casesService.uploadEvidence(caseId, file),
+    onSuccess: (_, { caseId }) => {
+      queryClient.invalidateQueries({ queryKey: ['case', caseId] });
+      toast.success('Evidence uploaded');
+    },
+    onError: (error: any) => {
+      console.error('Failed to upload evidence:', error);
+      toast.error(error.response?.data?.detail || error.message || 'Failed to upload evidence');
+    },
   });
 }

@@ -31,6 +31,7 @@ import { SLATimer } from '@/components/shared/SLATimer';
 import { RawAlertDrawer } from '@/components/workbench/RawAlertDrawer';
 import { Customer360Drawer } from '@/components/customer360/Customer360Drawer';
 import { EntityHistoryCard } from '@/components/shared/EntityHistoryCard';
+import { AlertNotesCard } from '@/components/workbench/AlertNotesCard';
 import { DismissAlertDialog } from '@/components/workbench/DismissAlertDialog';
 import { formatINRFull } from '@/lib/formatters';
 import { useAuth } from '@/contexts/AuthContext';
@@ -657,8 +658,9 @@ export default function AlertDetailsPage() {
         </div>
       </div>
 
-      {/* Activity History */}
-      <div className="mt-6">
+      {/* Notes + Activity History */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <AlertNotesCard alertId={alert.id} />
         <EntityHistoryCard entityType="alert" entityId={alert.id} />
       </div>
 

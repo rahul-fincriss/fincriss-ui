@@ -190,4 +190,17 @@ export const alertsService = {
     const data = response.data;
     return Array.isArray(data) ? data : (data.analysts || data.items || []);
   },
+
+  // ── Alert notes (require alerts:read) ──────────────────────────────────────
+
+  async getNotes(alertId: string): Promise<any[]> {
+    const response = await api.get(`/api/alerts/${alertId}/notes`);
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.notes || data.items || []);
+  },
+
+  async addNote(alertId: string, note: string): Promise<any> {
+    const response = await api.post(`/api/alerts/${alertId}/notes`, { note });
+    return response.data;
+  },
 };

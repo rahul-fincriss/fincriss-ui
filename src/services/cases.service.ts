@@ -119,4 +119,32 @@ export const casesService = {
   async attachAlertToCase(caseId: string, alertId: string): Promise<void> {
     await api.post(`/api/cases/${caseId}/attach-alert`, { alert_id: alertId });
   },
+
+  // Add a note to a case (cases:read). Returns the created note.
+  async addNote(caseId: string, note: string): Promise<any> {
+    const response = await api.post(`/api/cases/${caseId}/notes`, { note });
+    return response.data;
+  },
+
+  // Upload evidence: register the file to get a presigned S3 PUT URL, then
+  // upload the bytes directly to S3 (not through the API). Requires cases:write
+  // and S3 configured server-side (503 otherwise).
+  async uploadEvidence(caseId: string, file: File): Promise<any> {
+    const { data } = await api.post(
+      `/api/cases/${caseId}/evidence`,
+      null,
+      { params: { file_name: file.name } }
+    );
+    if (data?.upload_url) {
+      const put = await fetch(data.upload_url, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      });
+      if (!put.ok) {
+        throw new Error(`Upload to storage failed (HTTP ${put.status})`);
+      }
+    }
+    return data;
+  },
 };

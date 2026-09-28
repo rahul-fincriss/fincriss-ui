@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { SLATimer } from '@/components/shared/SLATimer';
 import { STRDraftTab } from '@/components/str/STRDraftTab';
+import { EntityHistoryCard } from '@/components/shared/EntityHistoryCard';
 import { 
   getExtendedCustomerProfile, 
   getTransactionsByCustomerId,
@@ -478,6 +479,9 @@ export default function CaseWorkspacePage() {
             />
           </TabsContent>
         </Tabs>
+
+        {/* Activity History */}
+        <EntityHistoryCard entityType="case" entityId={caseData.id} />
       </div>
     </AppLayout>
   );

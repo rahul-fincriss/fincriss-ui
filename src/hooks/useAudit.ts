@@ -23,3 +23,12 @@ export function useAdminAuditLogs(params: any = {}) {
     queryFn: () => auditService.listAdminLogs(params),
   });
 }
+
+// Full audit history for a single entity (alert / case / str), for detail pages
+export function useEntityHistory(entityType: string, entityId: string) {
+  return useQuery({
+    queryKey: ['entity-history', entityType, entityId],
+    queryFn: () => auditService.getEntityHistory(entityType, entityId),
+    enabled: !!entityType && !!entityId,
+  });
+}

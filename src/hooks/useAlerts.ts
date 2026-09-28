@@ -89,3 +89,90 @@ export function useUsers(params: any = {}) {
     queryFn: () => userManagementService.listUsers(params),
   });
 }
+
+// ── Analyst workflow mutations ───────────────────────────────────────────────
+
+function invalidateAlert(queryClient: ReturnType<typeof useQueryClient>, alertId: string) {
+  queryClient.invalidateQueries({ queryKey: ['alerts'] });
+  queryClient.invalidateQueries({ queryKey: ['alert', alertId] });
+  queryClient.invalidateQueries({ queryKey: ['entity-history', 'alert', alertId] });
+  queryClient.invalidateQueries({ queryKey: ['alert-queue'] });
+}
+
+export function useStartReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (alertId: string) => alertsService.startReview(alertId),
+    onSuccess: (_, alertId) => {
+      invalidateAlert(queryClient, alertId);
+      toast.success('Review started');
+    },
+    onError: (error: any) => toast.error(extractErrorMessage(error, 'Failed to start review')),
+  });
+}
+
+export function useEscalateAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ alertId, notes, assignedToUserId }: { alertId: string; notes?: string; assignedToUserId?: number }) =>
+      alertsService.escalateAlert(alertId, { notes, assigned_to_user_id: assignedToUserId }),
+    onSuccess: (data, { alertId }) => {
+      invalidateAlert(queryClient, alertId);
+      queryClient.invalidateQueries({ queryKey: ['cases'] });
+      toast.success(data?.created === false ? 'Alert escalated (case already existed)' : 'Alert escalated to case');
+    },
+    onError: (error: any) => toast.error(extractErrorMessage(error, 'Failed to escalate alert')),
+  });
+}
+
+export function useDismissAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ alertId, reason }: { alertId: string; reason: string }) =>
+      alertsService.dismissAlert(alertId, reason),
+    onSuccess: (_, { alertId }) => {
+      invalidateAlert(queryClient, alertId);
+      toast.success('Alert dismissed');
+    },
+    onError: (error: any) => toast.error(extractErrorMessage(error, 'Failed to dismiss alert')),
+  });
+}
+
+export function useBulkAssign() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ alertIds, userId }: { alertIds: string[]; userId: number }) =>
+      alertsService.bulkAssign(alertIds, userId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+      queryClient.invalidateQueries({ queryKey: ['alert-queue'] });
+      const assigned = data?.assigned?.length ?? 0;
+      const skipped = data?.skipped?.length ?? 0;
+      toast.success(`Assigned ${assigned} alert${assigned === 1 ? '' : 's'}${skipped ? `, skipped ${skipped}` : ''}`);
+    },
+    onError: (error: any) => toast.error(extractErrorMessage(error, 'Failed to bulk-assign alerts')),
+  });
+}
+
+// ── Triage queues ────────────────────────────────────────────────────────────
+
+export function useMyQueue(params: { workflow_status?: string; limit?: number; offset?: number } = {}) {
+  return useQuery({
+    queryKey: ['alert-queue', 'mine', params],
+    queryFn: () => alertsService.getMyQueue(params),
+  });
+}
+
+export function useUnassignedQueue(params: { priority_level?: string; limit?: number; offset?: number } = {}) {
+  return useQuery({
+    queryKey: ['alert-queue', 'unassigned', params],
+    queryFn: () => alertsService.getUnassignedQueue(params),
+  });
+}
+
+export function useWorkload() {
+  return useQuery({
+    queryKey: ['alert-queue', 'workload'],
+    queryFn: () => alertsService.getWorkload(),
+  });
+}

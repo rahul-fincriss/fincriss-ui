@@ -7,6 +7,7 @@ export interface User {
   email: string;
   role: UserRole;
   avatar?: string;
+  permissions?: string[]; // 'resource:action' strings from /auth/me
 }
 
 // Alert types

@@ -44,3 +44,15 @@ export function canWriteAlerts(user: User | null | undefined): boolean {
 export function canAssignAlerts(user: User | null | undefined): boolean {
   return hasPermission(user, 'alerts:assign');
 }
+
+export function canWriteStr(user: User | null | undefined): boolean {
+  return hasPermission(user, 'str:write');
+}
+
+export function canApproveStr(user: User | null | undefined): boolean {
+  return hasPermission(user, 'str:approve');
+}
+
+export function canReadStr(user: User | null | undefined): boolean {
+  return hasPermission(user, 'str:read');
+}

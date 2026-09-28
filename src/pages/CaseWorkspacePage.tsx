@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { SLATimer } from '@/components/shared/SLATimer';
-import { STRDraftTab } from '@/components/str/STRDraftTab';
+import { STRPanel } from '@/components/str/STRPanel';
 import { EntityHistoryCard } from '@/components/shared/EntityHistoryCard';
 import { 
   getExtendedCustomerProfile, 
@@ -82,11 +82,6 @@ export default function CaseWorkspacePage() {
         error: 'Failed to close case',
       }
     );
-  };
-
-  const handleSubmitSTRToPO = () => {
-    toast.success('STR submitted to Principal Officer for review');
-    navigate('/cases');
   };
 
   if (isLoading) {
@@ -504,10 +499,7 @@ export default function CaseWorkspacePage() {
 
           {/* STR Draft Tab */}
           <TabsContent value="str-draft">
-            <STRDraftTab 
-              caseData={caseData} 
-              onSubmitToPO={handleSubmitSTRToPO}
-            />
+            <STRPanel caseId={caseData.id} />
           </TabsContent>
         </Tabs>
 

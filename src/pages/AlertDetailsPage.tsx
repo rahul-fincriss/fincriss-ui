@@ -17,7 +17,10 @@ import {
   Hash,
   AlertTriangle,
   Link2,
-  FolderOpen
+  FolderOpen,
+  Play,
+  ArrowUpCircle,
+  Ban
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -28,11 +31,16 @@ import { SLATimer } from '@/components/shared/SLATimer';
 import { RawAlertDrawer } from '@/components/workbench/RawAlertDrawer';
 import { Customer360Drawer } from '@/components/customer360/Customer360Drawer';
 import { EntityHistoryCard } from '@/components/shared/EntityHistoryCard';
+import { DismissAlertDialog } from '@/components/workbench/DismissAlertDialog';
 import { formatINRFull } from '@/lib/formatters';
 import { useAuth } from '@/contexts/AuthContext';
+import { canWriteAlerts } from '@/lib/permissions';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { useAlert, useOpenCase, useGenerateSummary } from '@/hooks/useAlerts';
+import {
+  useAlert, useOpenCase, useGenerateSummary,
+  useStartReview, useEscalateAlert, useDismissAlert,
+} from '@/hooks/useAlerts';
 import { useCasesByCustomer, useAttachAlertToCase } from '@/hooks/useCases';
 import { Loader2, Sparkles } from 'lucide-react';
 
@@ -60,11 +68,18 @@ export default function AlertDetailsPage() {
   const { user } = useAuth();
   const [rawAlertDrawerOpen, setRawAlertDrawerOpen] = useState(false);
   const [customer360Open, setCustomer360Open] = useState(false);
+  const [dismissDialogOpen, setDismissDialogOpen] = useState(false);
 
   const { data: alert, isLoading, error } = useAlert(alertId || '');
   const openCaseMutation = useOpenCase();
   const generateSummaryMutation = useGenerateSummary();
   const attachAlertMutation = useAttachAlertToCase();
+  const startReviewMutation = useStartReview();
+  const escalateMutation = useEscalateAlert();
+  const dismissMutation = useDismissAlert();
+
+  const canWrite = canWriteAlerts(user);
+  const workflowStatus = alert?.workflowStatus;
 
   const hasOwnCase = !!alert?.caseInfo;
   const { data: customerCases = [] } = useCasesByCustomer(
@@ -89,9 +104,25 @@ export default function AlertDetailsPage() {
     );
   };
 
-  const handleDropAlert = () => {
-    toast.success('Alert dropped');
-    navigate('/alerts/workbench');
+  const handleStartReview = () => {
+    if (!alert) return;
+    startReviewMutation.mutate(alert.id);
+  };
+
+  const handleEscalate = () => {
+    if (!alert) return;
+    escalateMutation.mutate(
+      { alertId: alert.id, notes: `Escalated to case from alert ${alert.id}` },
+      { onSuccess: () => navigate('/cases') }
+    );
+  };
+
+  const handleDismiss = (reason: string) => {
+    if (!alert) return;
+    dismissMutation.mutate(
+      { alertId: alert.id, reason },
+      { onSuccess: () => setDismissDialogOpen(false) }
+    );
   };
 
   const handleRawPayloadAuditLog = (alertId: string, userId: string, userName: string) => {
@@ -168,14 +199,46 @@ export default function AlertDetailsPage() {
               <FileCode className="mr-2 h-4 w-4" />
               Raw Payload
             </Button>
-            <Button variant="outline" onClick={handleDropAlert}>
-              <XCircle className="mr-2 h-4 w-4" />
-              Drop
-            </Button>
-            <Button onClick={handleCreateCase} disabled={hasOwnCase} title={hasOwnCase ? 'A case already exists for this alert' : undefined}>
-              <FolderPlus className="mr-2 h-4 w-4" />
-              Create Case
-            </Button>
+
+            {/* Workflow-aware analyst actions (require alerts:write) */}
+            {canWrite && workflowStatus === 'ASSIGNED' && (
+              <Button onClick={handleStartReview} disabled={startReviewMutation.isPending}>
+                <Play className="mr-2 h-4 w-4" />
+                Start Review
+              </Button>
+            )}
+
+            {canWrite && workflowStatus === 'IN_REVIEW' && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setDismissDialogOpen(true)}
+                  disabled={dismissMutation.isPending}
+                >
+                  <Ban className="mr-2 h-4 w-4" />
+                  Dismiss
+                </Button>
+                <Button onClick={handleEscalate} disabled={escalateMutation.isPending || hasOwnCase}>
+                  <ArrowUpCircle className="mr-2 h-4 w-4" />
+                  Escalate to Case
+                </Button>
+              </>
+            )}
+
+            {/* Terminal states — no further workflow action */}
+            {(workflowStatus === 'ESCALATED' || workflowStatus === 'DISMISSED') && (
+              <Badge variant="outline" className="font-mono text-xs">
+                {workflowStatus}
+              </Badge>
+            )}
+
+            {/* Fallback: alerts outside the assigned/in-review flow can still open a case directly */}
+            {canWrite && (workflowStatus === 'NEW' || !workflowStatus) && (
+              <Button onClick={handleCreateCase} disabled={hasOwnCase} title={hasOwnCase ? 'A case already exists for this alert' : undefined}>
+                <FolderPlus className="mr-2 h-4 w-4" />
+                Create Case
+              </Button>
+            )}
           </div>
         </div>
 
@@ -613,6 +676,15 @@ export default function AlertDetailsPage() {
         onOpenChange={setCustomer360Open}
         customerId={alert.customerId}
         alert={alert}
+      />
+
+      {/* Dismiss Alert Dialog */}
+      <DismissAlertDialog
+        open={dismissDialogOpen}
+        onOpenChange={setDismissDialogOpen}
+        alertId={alert.id}
+        onConfirm={handleDismiss}
+        isPending={dismissMutation.isPending}
       />
     </AppLayout>
   );

@@ -139,4 +139,55 @@ export const alertsService = {
     const response = await api.post(`/api/alerts/${alertId}/reassign`, { user_id: Number(assignedTo) });
     return response.data;
   },
+
+  // ── Analyst workflow (require alerts:write) ────────────────────────────────
+
+  // ASSIGNED → IN_REVIEW
+  async startReview(alertId: string): Promise<any> {
+    const response = await api.post(`/api/alerts/${alertId}/start-review`);
+    return response.data;
+  },
+
+  // IN_REVIEW → ESCALATED (creates/links a case)
+  async escalateAlert(
+    alertId: string,
+    options: { assigned_to_user_id?: number; notes?: string } = {}
+  ): Promise<any> {
+    const response = await api.post(`/api/alerts/${alertId}/escalate`, options);
+    return response.data;
+  },
+
+  // IN_REVIEW → DISMISSED (reason is mandatory, min 5 chars server-side)
+  async dismissAlert(alertId: string, reason: string): Promise<any> {
+    const response = await api.post(`/api/alerts/${alertId}/dismiss`, { reason });
+    return response.data;
+  },
+
+  // ── Triage (require alerts:assign) ─────────────────────────────────────────
+
+  async bulkAssign(alertIds: string[], userId: number): Promise<any> {
+    const response = await api.post('/api/alerts/bulk-assign', {
+      alert_ids: alertIds,
+      user_id: userId,
+    });
+    return response.data;
+  },
+
+  async getMyQueue(params: { workflow_status?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
+    const response = await api.get('/api/alerts/queue/mine', { params });
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.alerts || data.items || []);
+  },
+
+  async getUnassignedQueue(params: { priority_level?: string; limit?: number; offset?: number } = {}): Promise<any[]> {
+    const response = await api.get('/api/alerts/queue/unassigned', { params });
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.alerts || data.items || []);
+  },
+
+  async getWorkload(): Promise<any[]> {
+    const response = await api.get('/api/alerts/queue/workload');
+    const data = response.data;
+    return Array.isArray(data) ? data : (data.analysts || data.items || []);
+  },
 };

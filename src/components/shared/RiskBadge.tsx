@@ -2,7 +2,8 @@ import { cn } from '@/lib/utils';
 import { RiskLevel } from '@/types';
 
 interface RiskBadgeProps {
-  level: RiskLevel;
+  // Accept unknown strings/undefined too — data isn't always a clean RiskLevel.
+  level?: RiskLevel | string | null;
   size?: 'sm' | 'md' | 'lg';
   showLabel?: boolean;
 }
@@ -14,7 +15,7 @@ export function RiskBadge({ level, size = 'md', showLabel = true }: RiskBadgePro
     lg: 'h-7 px-3 text-sm',
   };
 
-  const levelConfig = {
+  const levelConfig: Record<string, { className: string; label: string }> = {
     high: {
       className: 'badge-risk-high',
       label: 'High',
@@ -29,7 +30,12 @@ export function RiskBadge({ level, size = 'md', showLabel = true }: RiskBadgePro
     },
   };
 
-  const config = levelConfig[level];
+  const key = typeof level === 'string' ? level.toLowerCase() : '';
+  // Fallback for unknown / missing risk levels so a bad value never crashes the page.
+  const config = levelConfig[key] ?? {
+    className: 'bg-muted text-muted-foreground',
+    label: key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Unknown',
+  };
 
   return (
     <span
@@ -39,7 +45,7 @@ export function RiskBadge({ level, size = 'md', showLabel = true }: RiskBadgePro
         config.className
       )}
     >
-      {showLabel ? config.label : level[0].toUpperCase()}
+      {showLabel ? config.label : (config.label[0] || '?').toUpperCase()}
     </span>
   );
 }

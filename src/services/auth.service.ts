@@ -53,6 +53,7 @@ export const authService = {
       email: apiUser.email || "",
       role: userRole,
       avatar: apiUser.avatar_url,
+      permissions: Array.isArray(apiUser.permissions) ? apiUser.permissions : [],
     };
   },
 };

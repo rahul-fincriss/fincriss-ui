@@ -105,5 +105,9 @@ export const rolesService = {
   
   async removePermission(roleId: number, permissionId: number): Promise<void> {
     await api.delete(`/api/roles/${roleId}/permissions/${permissionId}`);
+  },
+
+  async deleteRole(roleId: number): Promise<void> {
+    await api.delete(`/api/roles/${roleId}`);
   }
 };

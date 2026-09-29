@@ -18,7 +18,6 @@ export const casesService = {
   async listCases(params: ListCasesParams = {}): Promise<Case[]> {
     const response = await api.get('/api/cases', { params });
     const data = response.data;
-    console.log("casesService.listCases raw data:", data);
     
     const cases = Array.isArray(data) ? data : (data.cases || data.items || []);
     return cases.map((c: any) => ({
@@ -45,7 +44,6 @@ export const casesService = {
   async getCase(caseId: string): Promise<Case> {
     const response = await api.get(`/api/cases/${caseId}`);
     const c = response.data;
-    console.log("casesService.getCase raw data:", c);
     
     return {
       id: (c.case_id || c.id).toString(),

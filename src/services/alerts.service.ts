@@ -20,7 +20,6 @@ export const alertsService = {
     // Note: We might need to map the API response to our internal PrioritizedAlert type
     // if the field names differ (e.g., camelCase vs snake_case)
     const data = response.data;
-    console.log("alertsService.listAlerts raw data:", data);
     
     // Preliminary mapping based on common patterns
     const alerts = Array.isArray(data) ? data : (data.alerts || data.items || []);
@@ -47,7 +46,6 @@ export const alertsService = {
   async getAlert(alertId: string): Promise<any> {
     const response = await api.get(`/api/alerts/${alertId}`);
     const alert = response.data;
-    console.log("alertsService.getAlert raw data:", alert);
     
     // Return full API response with normalized base fields
     return {

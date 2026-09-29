@@ -38,7 +38,6 @@ export const authService = {
     const response = await api.get('/auth/me');
     // Map the API user response to our internal User type if necessary
     const apiUser = response.data;
-    console.log("authService.getMe: raw API response:", apiUser);
     
     // Extract role - handle both string array and object array formats
     let userRole: UserRole = 'analyst';

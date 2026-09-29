@@ -44,10 +44,9 @@ import {
 } from '@/components/ui/tooltip';
 import { UserFormDialog } from './UserFormDialog';
 import { DeleteUserDialog } from './DeleteUserDialog';
-import { mockManagedUsers, mockWorkforceQueues } from '@/data/adminMockData';
-import { ManagedUser, UserStatus, WorkforceQueue } from '@/types/admin';
+import { mockWorkforceQueues } from '@/data/adminMockData';
+import { ManagedUser, WorkforceQueue } from '@/types/admin';
 import { UserRole } from '@/types';
-import { toast } from 'sonner';
 
 const roleLabels: Record<UserRole, string> = {
   analyst: 'AML Analyst',
@@ -58,10 +57,12 @@ const roleLabels: Record<UserRole, string> = {
 };
 
 import { useUsers } from '@/hooks/useAlerts';
+import { useSetUserActive } from '@/hooks/useUserManagement';
 import { Loader2, AlertCircle } from 'lucide-react';
 
 export function UserTable() {
   const { data: usersData, isLoading, error } = useUsers();
+  const setActive = useSetUserActive();
   const [queues] = useState<WorkforceQueue[]>(mockWorkforceQueues);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -106,23 +107,17 @@ export function UserTable() {
     setIsFormOpen(true);
   };
 
-  const handleSaveUser = (userData: Partial<ManagedUser>) => {
-    // API mutation to save user not yet integrated
-    toast.info(`API: Saving user "${userData.name || 'new user'}"...`);
-    setIsFormOpen(false);
-  };
-
   const handleToggleStatus = (user: ManagedUser) => {
-    const newStatus: UserStatus = user.status === 'active' ? 'inactive' : 'active';
-    // API mutation to toggle status not yet integrated
-    toast.info(`API: User "${user.name}" status toggled to ${newStatus}`);
+    setActive.mutate({ userId: user.id, active: user.status !== 'active' });
   };
 
+  // No hard-delete endpoint exists; "delete" deactivates the account (soft delete).
   const handleDeleteUser = () => {
     if (deletingUser) {
-      // API mutation to delete user not yet integrated
-      toast.info(`API: Deleting user "${deletingUser.name}"...`);
-      setDeletingUser(null);
+      setActive.mutate(
+        { userId: deletingUser.id, active: false },
+        { onSuccess: () => setDeletingUser(null) }
+      );
     }
   };
 
@@ -341,7 +336,6 @@ export function UserTable() {
         open={isFormOpen}
         onOpenChange={setIsFormOpen}
         user={editingUser}
-        onSave={handleSaveUser}
       />
 
       <DeleteUserDialog

@@ -27,6 +27,13 @@ export const authService = {
     return response.data;
   },
 
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await api.post('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+  },
+
   async getMe(): Promise<User> {
     const response = await api.get('/auth/me');
     // Map the API user response to our internal User type if necessary

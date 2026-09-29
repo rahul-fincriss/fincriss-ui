@@ -30,4 +30,32 @@ export const userManagementService = {
       };
     });
   },
+
+  async createUser(body: {
+    username: string; email: string; full_name: string; password: string; role_name?: string;
+  }): Promise<any> {
+    const response = await api.post('/api/users', body);
+    return response.data;
+  },
+
+  // Update name/email only (username is immutable server-side).
+  async updateUser(userId: string, body: { email?: string; full_name?: string }): Promise<any> {
+    const response = await api.put(`/api/users/${userId}`, body);
+    return response.data;
+  },
+
+  async setActive(userId: string, active: boolean): Promise<any> {
+    const path = active ? 'activate' : 'deactivate';
+    const response = await api.patch(`/api/users/${userId}/${path}`);
+    return response.data;
+  },
+
+  async assignRole(userId: string, roleName: string): Promise<any> {
+    const response = await api.post(`/api/users/${userId}/roles`, { role_name: roleName });
+    return response.data;
+  },
+
+  async removeRole(userId: string, roleId: number): Promise<void> {
+    await api.delete(`/api/users/${userId}/roles/${roleId}`);
+  },
 };

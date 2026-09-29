@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
@@ -15,9 +15,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, KeyRound } from 'lucide-react';
 import fincrissLogo from '@/assets/fincriss-logo.jpg';
 import { FinCrissAgent } from '@/components/agent/FinCrissAgent';
+import { ChangePasswordDialog } from '@/components/shared/ChangePasswordDialog';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -26,6 +27,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [changePwOpen, setChangePwOpen] = useState(false);
 
   const handleLogoClick = () => {
     navigate('/dashboard');
@@ -80,9 +82,9 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>My Account</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>
-                      <User className="mr-2 h-4 w-4" />
-                      Profile
+                    <DropdownMenuItem onClick={() => setChangePwOpen(true)}>
+                      <KeyRound className="mr-2 h-4 w-4" />
+                      Change password
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleLogout}>
@@ -100,6 +102,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </SidebarInset>
         <FinCrissAgent />
       </div>
+      <ChangePasswordDialog open={changePwOpen} onOpenChange={setChangePwOpen} />
     </SidebarProvider>
   );
 }

@@ -18,7 +18,6 @@ export interface Role {
 export const rolesService = {
   async listRoles(): Promise<Role[]> {
     const response = await api.get('/api/roles');
-    console.log("rolesService.listRoles raw:", response.data);
     const d = response.data;
     const rawRoles = Array.isArray(d) ? d : (d?.roles || d?.data || d?.items || d?.user_roles || []);
     return rawRoles.map((r: any) => ({
@@ -48,7 +47,6 @@ export const rolesService = {
   
   async listPermissions(): Promise<Permission[]> {
     const response = await api.get('/api/permissions');
-    console.log("rolesService.listPermissions raw:", response.data);
     const d = response.data;
     
     // CASE 1: Response is already a flat array

@@ -6,7 +6,6 @@ export const userManagementService = {
   async listUsers(_params?: Record<string, unknown>): Promise<ManagedUser[]> {
     const response = await api.get('/api/users');
     const data = response.data;
-    console.log("userManagementService.listUsers raw data:", data);
     
     const users = Array.isArray(data) ? data : (data.users || data.items || data.data || []);
     return users.map((u: any) => {

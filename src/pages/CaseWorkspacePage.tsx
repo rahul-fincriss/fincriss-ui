@@ -22,11 +22,6 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { SLATimer } from '@/components/shared/SLATimer';
 import { STRPanel } from '@/components/str/STRPanel';
 import { EntityHistoryCard } from '@/components/shared/EntityHistoryCard';
-import { 
-  getExtendedCustomerProfile, 
-  getTransactionsByCustomerId,
-  mockExtendedCustomerProfiles
-} from '@/data/mockData';
 import { formatINRFull } from '@/lib/formatters';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -113,10 +108,7 @@ export default function CaseWorkspacePage() {
     );
   }
 
-  // Look up customer and transactions (keeping mock for now)
-  const customerProfile = getExtendedCustomerProfile(caseData.customerId) || mockExtendedCustomerProfiles[0];
-  const transactions = getTransactionsByCustomerId(caseData.customerId);
-  const customer = customerProfile.kyc;
+  const transactions = caseData.transactions;
 
   return (
     <AppLayout>
@@ -196,34 +188,36 @@ export default function CaseWorkspacePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Transaction History</CardTitle>
-                <CardDescription>All transactions linked to this case</CardDescription>
+                <CardDescription>
+                  Transactions linked to this case's alert{caseData.linkedAlerts.length > 1 ? 's' : ''}, frozen at escalation
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {transactions.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">No transactions found for this customer</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">No transactions linked to this case</p>
                   ) : (
                     transactions.map((txn) => (
                       <div
-                        key={txn.id}
+                        key={txn.transId}
                         className="flex items-center justify-between rounded-lg border border-border p-4"
                       >
                         <div className="flex items-center gap-4">
-                          <div className={`rounded-full p-2 ${txn.type === 'credit' ? 'bg-risk-low/20' : 'bg-risk-high/20'}`}>
-                            <AlertTriangle className={`h-4 w-4 ${txn.type === 'credit' ? 'text-risk-low' : 'text-risk-high'}`} />
+                          <div className="rounded-full p-2 bg-muted">
+                            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
                           </div>
                           <div>
-                            <p className="font-medium">{txn.counterparty}</p>
+                            <p className="font-medium">{txn.transType || 'Transaction'} · {txn.transId}</p>
                             <p className="text-sm text-muted-foreground">{txn.description}</p>
                             <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="text-xs">{txn.channel}</Badge>
-                              <Badge variant="outline" className="text-xs">{txn.country}</Badge>
+                              {txn.channel && <Badge variant="outline" className="text-xs">{txn.channel}</Badge>}
+                              {txn.country && <Badge variant="outline" className="text-xs">{txn.country}</Badge>}
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className={`font-mono text-lg font-bold ${txn.type === 'credit' ? 'text-risk-low' : 'text-risk-high'}`}>
-                            {txn.type === 'credit' ? '+' : '-'}{formatINRFull(txn.amount)}
+                          <p className="font-mono text-lg font-bold">
+                            {formatINRFull(txn.amount)}
                           </p>
                           <p className="text-sm text-muted-foreground">
                             {format(txn.date, 'MMM dd, yyyy')}
@@ -320,141 +314,88 @@ export default function CaseWorkspacePage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">System Findings</CardTitle>
-                <CardDescription>AI-generated analysis and recommendations</CardDescription>
+                <CardDescription>Rule and ML findings that led to this case, frozen at escalation</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Dynamic findings based on case */}
-                {caseData.id === 'CASE-PONZI-2025-001' ? (
-                  <>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-high">High Confidence</Badge>
-                        <span className="text-sm font-medium">Investment Fraud / Ponzi Scheme Typology Match</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Account exhibits classic Ponzi scheme pattern: High-value inflows from 12 unrelated "investors" 
-                        totaling ₹1.5 Crore with memos like "Fund Commitment" and "Seed Capital". Rapid layering via 
-                        internal transfer to related party LLP (R.K. Health Investment LLP) within 72 hours. Cyclical 
-                        "Quarterly Profit Share" payouts to original investors on 45-day cycles.
-                      </p>
-                    </div>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-high">High Confidence</Badge>
-                        <span className="text-sm font-medium">High-Value Unrelated Investor Inflows</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Dr. Ravi Gopal Kumar, a cardiologist with declared monthly income of ₹4,00,000, received 
-                        ₹1.5 Crore from 12 unrelated third-party individuals via RTGS/NEFT over 23 days. Transaction 
-                        memos reference investment terminology ("Seed Capital", "Fund Commitment") inconsistent with 
-                        medical practice operations.
-                      </p>
-                    </div>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-high">High Confidence</Badge>
-                        <span className="text-sm font-medium">Rapid Layering via Related LLP Account</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        ₹1.5 Crore transferred from personal savings to R.K. Health Investment LLP (related party entity) 
-                        within 72 hours of final investor deposit. LLP is controlled by Dr. Kumar as sole authorized 
-                        signatory. Declared LLP business activity ("Consulting") inconsistent with investment fund collection.
-                      </p>
-                    </div>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-high">High Confidence</Badge>
-                        <span className="text-sm font-medium">Cyclical Payouts Labeled "Profit Distribution"</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        "Quarterly Profit Share" payments totaling ₹1.2 Crore+ disbursed to original investors on 
-                        approximately 45-day cycles. Payout schedule does not align with any legitimate investment 
-                        instrument. Pattern indicates returns funded from subsequent investor inflows (classic pyramid structure).
-                      </p>
-                    </div>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-medium">Medium Confidence</Badge>
-                        <span className="text-sm font-medium">Integration via ₹50L Personal Real Estate Purchase</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        ₹50,00,000 transferred to Goa Seaside Properties Pvt Ltd for "Commercial Real Estate Purchase" 
-                        (luxury villa in Goa). Payment sourced from business LLP account - personal asset acquisition 
-                        funded via investor capital indicates integration phase of proceeds.
-                      </p>
-                    </div>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="outline">Advisory</Badge>
-                        <span className="text-sm font-medium">No SEBI Registration Indication</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        No evidence of SEBI registration found for any collective investment scheme operated by 
-                        Dr. Ravi Gopal Kumar or R.K. Health Investment LLP. Operating an unregistered CIS is a violation 
-                        under SEBI Act, 1992. Consider referral to SEBI and Enforcement Directorate.
-                      </p>
-                    </div>
-                  </>
-                ) : caseData.id === 'CASE-MM-2026-001' ? (
-                  <>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-high">High Confidence</Badge>
-                        <span className="text-sm font-medium">Money Mule / Funnel Account Typology Match</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Account exhibits classic funnel pattern: Multiple unrelated domestic inflows from 8 geographically 
-                        dispersed sources (Delhi, Jaipur, Mumbai, Kolkata, Hyderabad, Chennai, Ahmedabad, Indore) rapidly 
-                        aggregated, followed by single large international outflow to high-risk jurisdiction (Cyprus).
-                      </p>
-                    </div>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-high">High Confidence</Badge>
-                        <span className="text-sm font-medium">Severe Profile Mismatch</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Account holder is a homemaker with zero declared income and expected turnover of ₹0-₹50,000. 
-                        Actual inflows of ₹12,00,000 over 10 days represent a deviation exceeding 24,000% from declared profile.
-                        No commercial rationale exists for "Consulting Fee" payment to Cyprus entity.
-                      </p>
-                    </div>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-high">High Confidence</Badge>
-                        <span className="text-sm font-medium">Rapid Transfer to High-Risk Jurisdiction</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        ₹10,00,000 transferred to Eurolink Consulting Ltd (Cyprus) within 48 hours of final domestic deposit.
-                        Cyprus is classified as a high-risk jurisdiction for money laundering under FATF assessment.
-                        Timing pattern consistent with layering phase of ML typology.
-                      </p>
-                    </div>
-                  </>
+                {!caseData.frozenFindings ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No frozen findings for this case — it may predate system-findings tracking.
+                  </p>
                 ) : (
                   <>
                     <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-high">High Confidence</Badge>
-                        <span className="text-sm font-medium">Trade-Based Money Laundering Pattern</span>
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <Badge className={
+                          (caseData.frozenFindings.priorityScore ?? 0) >= 70 ? 'badge-risk-high'
+                          : (caseData.frozenFindings.priorityScore ?? 0) >= 40 ? 'badge-risk-medium'
+                          : 'badge-risk-low'
+                        }>
+                          Priority {caseData.frozenFindings.priorityScore?.toFixed(0) ?? '—'}
+                        </Badge>
+                        {caseData.frozenFindings.ruleScore != null && (
+                          <Badge variant="outline">Rule score {caseData.frozenFindings.ruleScore}</Badge>
+                        )}
+                        {caseData.frozenFindings.mlScore != null && (
+                          <Badge variant="outline">ML score {(caseData.frozenFindings.mlScore * 100).toFixed(0)}%</Badge>
+                        )}
+                        {caseData.frozenFindings.modelVersion && (
+                          <Badge variant="outline">{caseData.frozenFindings.modelVersion}</Badge>
+                        )}
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        Analysis indicates systematic over-invoicing of goods through shell companies 
-                        in high-risk jurisdictions. Transaction velocity and amounts are inconsistent 
-                        with declared business operations.
-                      </p>
+                      {caseData.frozenFindings.explanation && (
+                        <p className="text-sm text-muted-foreground">{caseData.frozenFindings.explanation}</p>
+                      )}
                     </div>
-                    <div className="ai-generated rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="badge-risk-medium">Medium Confidence</Badge>
-                        <span className="text-sm font-medium">Layering Through Multiple Accounts</span>
+
+                    {caseData.frozenFindings.ruleReasons && (
+                      <div className="rounded-lg border border-border p-4">
+                        <p className="text-sm font-medium mb-3">Rules triggered</p>
+                        <div className="space-y-2">
+                          {Array.isArray(caseData.frozenFindings.ruleReasons) ? (
+                            caseData.frozenFindings.ruleReasons.map((reason, i) => (
+                              <p key={i} className="text-sm text-muted-foreground">{String(reason)}</p>
+                            ))
+                          ) : (
+                            Object.entries(caseData.frozenFindings.ruleReasons as Record<string, unknown>).map(([rule, score]) => (
+                              <div key={rule} className="flex items-center justify-between text-sm">
+                                <span className="font-medium">{rule.replace(/_/g, ' ')}</span>
+                                <span className="text-muted-foreground font-mono">{String(score)}</span>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        Funds appear to be moved rapidly through multiple intermediary accounts 
-                        before settling in offshore entities. Pattern consistent with layering phase.
+                    )}
+
+                    {caseData.frozenFindings.frozenAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Frozen at escalation: {format(caseData.frozenFindings.frozenAt, 'MMM dd, yyyy HH:mm')}
+                        {caseData.frozenFindings.sourceAlertId && ` · from ${caseData.frozenFindings.sourceAlertId}`}
                       </p>
-                    </div>
+                    )}
                   </>
+                )}
+
+                {(caseData.linkedAlertDetails?.length ?? 0) > 1 && (
+                  <div className="rounded-lg border border-border p-4 space-y-3">
+                    <p className="text-sm font-medium">Additional linked alerts</p>
+                    {caseData.linkedAlertDetails
+                      .filter(a => a.alertId !== caseData.frozenFindings?.sourceAlertId)
+                      .map((a) => (
+                        <div key={a.alertId} className="text-sm border-t border-border pt-2 first:border-t-0 first:pt-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium">{a.alertId}</span>
+                            {a.priorityLevel && <Badge variant="outline">{a.priorityLevel}</Badge>}
+                            {a.workflowStatus && <Badge variant="outline">{a.workflowStatus}</Badge>}
+                          </div>
+                          {a.ruleReasons && !Array.isArray(a.ruleReasons) && (
+                            <p className="text-muted-foreground mt-1">
+                              {Object.keys(a.ruleReasons as Record<string, unknown>).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                  </div>
                 )}
               </CardContent>
             </Card>

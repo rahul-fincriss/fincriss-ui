@@ -91,6 +91,7 @@ export interface Case {
   id: string;
   title?: string;
   linkedAlerts: string[];
+  linkedAlertDetails?: CaseLinkedAlert[];
   customerId: string;
   customerName: string;
   investigatorId?: string;
@@ -108,6 +109,66 @@ export interface Case {
   documents: CaseDocument[];
   description?: string;
   alertsCount?: number;
+  // System findings frozen at escalation time — won't drift if the source
+  // alert is later rescored. Undefined for cases escalated before this
+  // existed with no matching backfill.
+  frozenFindings?: CaseFindings;
+  // Transactions linked to the case's alert(s), frozen at escalation /
+  // attach-alert time (each alert maps to one transaction; a case can have
+  // several alerts).
+  transactions: CaseTransaction[];
+  // Live scoring context from the case's primary alert (currently reflects
+  // the alert's present state, unlike frozenFindings).
+  alertType?: string;
+  severity?: string;
+  scenarioCode?: string;
+  alertDate?: Date;
+  // Customer risk context, live-joined (not frozen).
+  customerRiskRating?: string;
+  customerIsPep?: boolean;
+  customerNationality?: string;
+  customerIndustryCode?: string;
+  customerOccupation?: string;
+  customerSince?: string;
+}
+
+export interface CaseFindings {
+  ruleScore?: number;
+  ruleReasons?: Record<string, unknown> | unknown[];
+  mlScore?: number;
+  priorityScore?: number;
+  explanation?: string;
+  modelVersion?: string;
+  sourceAlertId?: string;
+  frozenAt?: Date;
+}
+
+export interface CaseTransaction {
+  transId: string;
+  accountId?: string;
+  customerId?: string;
+  date: Date;
+  amount: number;
+  currency: string;
+  transType?: string;
+  description?: string;
+  counterpartyId?: string;
+  country?: string;
+  channel?: string;
+  sourceAlertId?: string;
+}
+
+export interface CaseLinkedAlert {
+  alertId: string;
+  alertType?: string;
+  amount?: number;
+  currency?: string;
+  alertDate?: Date;
+  priorityScore?: number;
+  priorityLevel?: string;
+  ruleReasons?: Record<string, unknown> | unknown[];
+  workflowStatus?: string;
+  linkedAt?: Date;
 }
 
 export interface CaseNote {

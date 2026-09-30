@@ -1,5 +1,51 @@
 import api from '@/lib/api-client';
-import { Case, CaseStatus, RiskLevel } from '@/types';
+import { Case, CaseFindings, CaseLinkedAlert, CaseStatus, CaseTransaction, RiskLevel } from '@/types';
+
+function mapFindings(f: any): CaseFindings | undefined {
+  if (!f) return undefined;
+  return {
+    ruleScore: f.rule_score,
+    ruleReasons: f.rule_reasons,
+    mlScore: f.ml_score,
+    priorityScore: f.priority_score,
+    explanation: f.explanation,
+    modelVersion: f.model_version,
+    sourceAlertId: f.source_alert_id,
+    frozenAt: f.frozen_at ? new Date(f.frozen_at) : undefined,
+  };
+}
+
+function mapTransactions(txns: any[]): CaseTransaction[] {
+  return (txns || []).map((t: any) => ({
+    transId: String(t.trans_id),
+    accountId: t.account_id,
+    customerId: t.customer_id,
+    date: new Date(t.trans_date),
+    amount: t.amount || 0,
+    currency: t.currency || 'INR',
+    transType: t.trans_type,
+    description: t.description,
+    counterpartyId: t.counterparty_id,
+    country: t.country,
+    channel: t.channel,
+    sourceAlertId: t.source_alert_id,
+  }));
+}
+
+function mapLinkedAlerts(alerts: any[]): CaseLinkedAlert[] {
+  return (alerts || []).map((a: any) => ({
+    alertId: a.alert_id,
+    alertType: a.alert_type,
+    amount: a.amount,
+    currency: a.currency,
+    alertDate: a.alert_date ? new Date(a.alert_date) : undefined,
+    priorityScore: a.priority_score,
+    priorityLevel: a.priority_level,
+    ruleReasons: a.rule_reasons,
+    workflowStatus: a.workflow_status,
+    linkedAt: a.linked_at ? new Date(a.linked_at) : undefined,
+  }));
+}
 
 export interface ListCasesParams {
   priority?: string;
@@ -38,13 +84,14 @@ export const casesService = {
       currency: c.currency || 'INR',
       notes: [],
       documents: [],
+      transactions: [],
     }));
   },
 
   async getCase(caseId: string): Promise<Case> {
     const response = await api.get(`/api/cases/${caseId}`);
     const c = response.data;
-    
+
     return {
       id: (c.case_id || c.id).toString(),
       title: c.title || c.case_number || `Investigation: ${c.customer_name || 'Customer'}`,
@@ -60,6 +107,7 @@ export const casesService = {
       description: c.description || c.summary || '',
       alertsCount: c.alerts_count || (c.linked_alerts || []).length,
       linkedAlerts: (c.linked_alerts || []).map((a: any) => typeof a === 'string' ? a : a.alert_id || a.id),
+      linkedAlertDetails: mapLinkedAlerts(c.linked_alerts),
       slaDeadline: new Date(c.sla_deadline || new Date(c.created_at || Date.now()).getTime() + 86400000 * 3),
       totalAmount: c.total_amount || c.amount || 0,
       currency: c.currency || 'INR',
@@ -78,6 +126,18 @@ export const casesService = {
         uploadedAt: new Date(d.uploaded_at || d.created_at || Date.now()),
         url: d.url || d.file_url || '#',
       })),
+      frozenFindings: mapFindings(c.frozen_findings),
+      transactions: mapTransactions(c.transactions),
+      alertType: c.alert_type,
+      severity: c.severity,
+      scenarioCode: c.scenario_code,
+      alertDate: c.alert_date ? new Date(c.alert_date) : undefined,
+      customerRiskRating: c.risk_rating,
+      customerIsPep: !!c.is_pep,
+      customerNationality: c.nationality,
+      customerIndustryCode: c.industry_code,
+      customerOccupation: c.occupation,
+      customerSince: c.customer_since,
     };
   },
 
@@ -111,6 +171,7 @@ export const casesService = {
       currency: c.currency || 'INR',
       notes: [],
       documents: [],
+      transactions: [],
     }));
   },
 

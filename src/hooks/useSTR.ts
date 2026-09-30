@@ -52,8 +52,8 @@ function invalidateStr(qc: ReturnType<typeof useQueryClient>, caseId?: string | 
 export function useCreateStrDraft() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ caseId, narrative, evidenceRefs }: { caseId: string | number; narrative?: string; evidenceRefs?: string[] }) =>
-      strService.createDraft(caseId, { narrative, evidence_refs: evidenceRefs }),
+    mutationFn: ({ caseId, narrative, evidenceRefs, narrativeSource }: { caseId: string | number; narrative?: string; evidenceRefs?: string[]; narrativeSource?: string }) =>
+      strService.createDraft(caseId, { narrative, evidence_refs: evidenceRefs, narrative_source: narrativeSource }),
     onSuccess: (_, { caseId }) => {
       invalidateStr(qc, caseId);
       toast.success('STR draft created');
@@ -65,8 +65,8 @@ export function useCreateStrDraft() {
 export function useUpdateStrDraft() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ strId, narrative, evidenceRefs }: { strId: number; caseId?: string | number; narrative?: string; evidenceRefs?: string[] }) =>
-      strService.updateDraft(strId, { narrative, evidence_refs: evidenceRefs }),
+    mutationFn: ({ strId, narrative, evidenceRefs, narrativeSource }: { strId: number; caseId?: string | number; narrative?: string; evidenceRefs?: string[]; narrativeSource?: string }) =>
+      strService.updateDraft(strId, { narrative, evidence_refs: evidenceRefs, narrative_source: narrativeSource }),
     onSuccess: (_, { caseId }) => {
       invalidateStr(qc, caseId);
       toast.success('STR saved');

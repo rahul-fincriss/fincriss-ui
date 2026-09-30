@@ -9,6 +9,7 @@ import {
   Play,
   PlusCircle,
   ScrollText,
+  Sparkles,
   Upload,
   XCircle,
 } from 'lucide-react';
@@ -31,6 +32,7 @@ import { CaseCustomerRiskCard } from '@/components/cases/CaseCustomerRiskCard';
 import { CaseLinkedAlertsCard } from '@/components/cases/CaseLinkedAlertsCard';
 import { CaseTransactionsTable } from '@/components/cases/CaseTransactionsTable';
 import { CloseCaseDialog } from '@/components/cases/CloseCaseDialog';
+import { CaseNarrativePanel, CaseNarrativeTeaser } from '@/components/cases/CaseNarrativePanel';
 import { formatINRFull } from '@/lib/formatters';
 import { canCloseCase, isCaseClosed } from '@/lib/caseStatus';
 import { canCloseCases, canWriteCases } from '@/lib/permissions';
@@ -59,6 +61,7 @@ export default function CaseWorkspacePage() {
   const { user } = useAuth();
   const [newNote, setNewNote] = useState('');
   const [closeOpen, setCloseOpen] = useState(false);
+  const [tab, setTab] = useState('overview');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canWrite = canWriteCases(user);
@@ -262,9 +265,13 @@ export default function CaseWorkspacePage() {
         </Card>
 
         {/* Tabbed Content */}
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs value={tab} onValueChange={setTab} className="space-y-4">
           <TabsList className="flex-wrap">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="narrative" className="gap-1.5">
+              <Sparkles className="h-4 w-4 text-primary" />
+              AI Narrative
+            </TabsTrigger>
             <TabsTrigger value="transactions">Transactions ({caseData.transactions.length})</TabsTrigger>
             <TabsTrigger value="notes">Notes ({caseData.notes.length})</TabsTrigger>
             <TabsTrigger value="documents">Documents ({caseData.documents.length})</TabsTrigger>
@@ -275,11 +282,16 @@ export default function CaseWorkspacePage() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
+            <CaseNarrativeTeaser caseData={caseData} onOpen={() => setTab('narrative')} />
             <div className="grid gap-4 xl:grid-cols-2">
               <CaseAlertContextCard caseData={caseData} />
               <CaseCustomerRiskCard caseData={caseData} />
             </div>
             <CaseLinkedAlertsCard caseData={caseData} />
+          </TabsContent>
+
+          <TabsContent value="narrative">
+            <CaseNarrativePanel caseData={caseData} onOpenStr={() => setTab('str-draft')} />
           </TabsContent>
 
           <TabsContent value="transactions">

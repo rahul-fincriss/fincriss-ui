@@ -84,7 +84,7 @@ export const strService = {
 
   async createDraft(
     caseId: string | number,
-    body: { narrative?: string; evidence_refs?: string[] }
+    body: { narrative?: string; evidence_refs?: string[]; narrative_source?: string }
   ): Promise<any> {
     const response = await api.post(`/api/cases/${caseId}/str`, body);
     return response.data;
@@ -92,7 +92,7 @@ export const strService = {
 
   async updateDraft(
     strId: number,
-    body: { narrative?: string; evidence_refs?: string[] }
+    body: { narrative?: string; evidence_refs?: string[]; narrative_source?: string }
   ): Promise<any> {
     const response = await api.patch(`/api/str/${strId}`, body);
     return response.data;

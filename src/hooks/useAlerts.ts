@@ -49,8 +49,9 @@ export function useGenerateSummary() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: (alertId: string) => alertsService.generateSummary(alertId),
-    onSuccess: (_, alertId) => {
+    mutationFn: ({ alertId, regenerate }: { alertId: string; regenerate?: boolean }) =>
+      alertsService.generateSummary(alertId, regenerate),
+    onSuccess: (_, { alertId }) => {
       queryClient.invalidateQueries({ queryKey: ['alert', alertId] });
       toast.success('AI summary generated successfully');
     },

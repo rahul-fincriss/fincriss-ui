@@ -15,6 +15,69 @@ beforeEach(() => {
   mockGet.mockReset();
 });
 
+describe('casesService.listCases', () => {
+  it('maps the list fields the API actually sends (counts, totals, assignee, STR status)', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        total: 1,
+        cases: [{
+          case_id: 122,
+          case_number: 'CASE-2026-00121',
+          alert_id: 'ALT20260406000252',
+          customer_id: 'CUST000217',
+          customer_name: 'Indira Mehta',
+          priority_level: 'HIGH',
+          status: 'IN_PROGRESS',
+          assigned_to_user_id: 4,
+          assigned_to_username: 'Vikram Rao',
+          amount: 100,
+          total_amount: 9182424.63,
+          alerts_count: 2,
+          str_status: 'DRAFT',
+          created_at: '2026-09-30T16:18:28Z',
+        }],
+      },
+    });
+
+    const [c] = await casesService.listCases({ limit: 500 });
+
+    expect(mockGet).toHaveBeenCalledWith('/api/cases', { params: { limit: 500 } });
+    expect(c.caseNumber).toBe('CASE-2026-00121');
+    expect(c.alertId).toBe('ALT20260406000252');
+    expect(c.status).toBe('in_progress');
+    expect(c.priority).toBe('high');
+    expect(c.alertsCount).toBe(2);
+    expect(c.totalAmount).toBe(9182424.63);
+    expect(c.investigatorName).toBe('Vikram Rao');
+    expect(c.assignedToUserId).toBe(4);
+    expect(c.strStatus).toBe('DRAFT');
+  });
+
+  it('falls back to the alert amount and "Unassigned" when there are no transactions or assignee', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { cases: [{ case_id: 8, status: 'CLOSED_FALSE_POSITIVE', amount: 250, str_status: null }] },
+    });
+
+    const [c] = await casesService.listCases();
+
+    expect(c.status).toBe('closed_false_positive');
+    expect(c.totalAmount).toBe(250);
+    expect(c.investigatorName).toBe('Unassigned');
+    expect(c.strStatus).toBeNull();
+  });
+});
+
+describe('casesService.closeCase', () => {
+  it('sends outcome and rationale (the backend rejects anything else)', async () => {
+    mockPost.mockResolvedValueOnce({ data: {} });
+    await casesService.closeCase('122', 'FALSE_POSITIVE', 'Funds traced to property sale');
+    expect(mockPost).toHaveBeenCalledWith('/api/cases/122/close', {
+      outcome: 'FALSE_POSITIVE',
+      rationale: 'Funds traced to property sale',
+    });
+  });
+});
+
 describe('casesService.getCase', () => {
   it('maps frozen_findings, transactions and linked_alerts instead of discarding them', async () => {
     mockGet.mockResolvedValueOnce({
@@ -63,6 +126,31 @@ describe('casesService.getCase', () => {
     expect(c.transactions[0].amount).toBe(9182424.63);
     expect(c.linkedAlertDetails).toHaveLength(1);
     expect(c.linkedAlertDetails?.[0].ruleReasons).toEqual({ PEP: 100 });
+    expect(c.caseNumber).toBe('CASE-2026-00121');
+  });
+
+  it('maps customer features and the originating alert AI summary', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        case_id: 122,
+        alert_id: 'ALT20260406000252',
+        status: 'OPEN',
+        customer_features: { txn_count_30d: 12, avg_amount_30d: 5000 },
+        alert_ai_summary: {
+          alert_summary: 'PEP with large cross-border flows.',
+          risk_signals: [{ signal: 'PEP', description: 'Government employee' }],
+          profile_analysis: 'Activity exceeds declared income.',
+          model: 'gpt-4o',
+        },
+      },
+    });
+
+    const c = await casesService.getCase('122');
+
+    expect(c.alertId).toBe('ALT20260406000252');
+    expect(c.customerFeatures).toEqual({ txn_count_30d: 12, avg_amount_30d: 5000 });
+    expect(c.alertAiSummary?.alertSummary).toBe('PEP with large cross-border flows.');
+    expect(c.alertAiSummary?.riskSignals).toHaveLength(1);
   });
 
   it('leaves frozenFindings undefined and transactions empty when the case predates the feature', async () => {

@@ -119,12 +119,15 @@ export const alertsService = {
     };
   },
 
-  async openCase(alertId: string, request: OpenCaseRequest): Promise<void> {
-    await api.post(`/api/alerts/${alertId}/open-case`, request);
+  async openCase(alertId: string, request: OpenCaseRequest): Promise<{ case_id: number; created: boolean }> {
+    const response = await api.post(`/api/alerts/${alertId}/open-case`, request);
+    return response.data;
   },
 
-  async generateSummary(alertId: string): Promise<any> {
-    const response = await api.post(`/api/alerts/${alertId}/generate-summary`);
+  async generateSummary(alertId: string, regenerate = false): Promise<any> {
+    const response = await api.post(`/api/alerts/${alertId}/generate-summary`, null, {
+      params: regenerate ? { regenerate: true } : undefined,
+    });
     return response.data;
   },
 

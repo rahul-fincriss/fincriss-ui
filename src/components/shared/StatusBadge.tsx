@@ -22,13 +22,14 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   dropped: { label: 'Dropped', className: 'bg-muted text-muted-foreground' },
   case_created: { label: 'Case Created', className: 'badge-status-completed' },
   
-  // Case statuses
+  // Case statuses (backend cases.status, lowercased)
   open: { label: 'Open', className: 'badge-status-pending' },
-  investigation: { label: 'Investigation', className: 'badge-status-in-progress' },
+  in_progress: { label: 'In Progress', className: 'badge-status-in-progress' },
   str_draft: { label: 'STR Draft', className: 'badge-status-in-progress' },
-  pending_review: { label: 'Pending Review', className: 'badge-status-pending' },
+  under_review: { label: 'STR Under Review', className: 'badge-status-pending' },
+  closed: { label: 'Closed – True Positive', className: 'bg-destructive/20 text-destructive border border-destructive/30' },
+  closed_false_positive: { label: 'Closed – False Positive', className: 'bg-muted text-muted-foreground' },
   submitted: { label: 'Submitted', className: 'badge-status-completed' },
-  closed: { label: 'Closed', className: 'bg-muted text-muted-foreground' },
   
   // STR statuses
   draft: { label: 'Draft', className: 'badge-status-pending' },

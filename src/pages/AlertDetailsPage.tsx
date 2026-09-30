@@ -99,7 +99,7 @@ export default function AlertDetailsPage() {
       }),
       {
         loading: 'Opening case...',
-        success: () => { navigate('/cases'); return 'Case created successfully'; },
+        success: (data) => { navigate(`/cases/${data.case_id}`); return 'Case created successfully'; },
         error: 'Failed to create case',
       }
     );
@@ -114,7 +114,7 @@ export default function AlertDetailsPage() {
     if (!alert) return;
     escalateMutation.mutate(
       { alertId: alert.id, notes: `Escalated to case from alert ${alert.id}` },
-      { onSuccess: () => navigate('/cases') }
+      { onSuccess: (data) => navigate(data?.case_id ? `/cases/${data.case_id}` : '/cases') }
     );
   };
 
@@ -363,14 +363,14 @@ export default function AlertDetailsPage() {
                   size="sm"
                   className="gap-1.5"
                   disabled={generateSummaryMutation.isPending}
-                  onClick={() => generateSummaryMutation.mutate(alert.id)}
+                  onClick={() => generateSummaryMutation.mutate({ alertId: alert.id, regenerate: !!aiSummary })}
                 >
                   {generateSummaryMutation.isPending ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Sparkles className="h-3.5 w-3.5" />
                   )}
-                  {generateSummaryMutation.isPending ? 'Generating...' : 'Generate Summary'}
+                  {generateSummaryMutation.isPending ? 'Generating...' : aiSummary ? 'Regenerate' : 'Generate Summary'}
                 </Button>
               </div>
               {aiSummary?.model && (

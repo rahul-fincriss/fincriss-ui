@@ -45,6 +45,14 @@ export function canAssignAlerts(user: User | null | undefined): boolean {
   return hasPermission(user, 'alerts:assign');
 }
 
+export function canWriteCases(user: User | null | undefined): boolean {
+  return hasPermission(user, 'cases:write');
+}
+
+export function canCloseCases(user: User | null | undefined): boolean {
+  return hasPermission(user, 'cases:close');
+}
+
 export function canWriteStr(user: User | null | undefined): boolean {
   return hasPermission(user, 'str:write');
 }

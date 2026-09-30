@@ -82,13 +82,17 @@ export interface WorkbenchAuditEntry {
 }
 
 // Case types
-export type CaseStatus = 'open' | 'investigation' | 'str_draft' | 'pending_review' | 'submitted' | 'closed';
+// Backend cases.status, lowercased.
+export type CaseStatus = 'open' | 'in_progress' | 'str_draft' | 'under_review' | 'closed' | 'closed_false_positive';
 
-// STR Status for visibility in Cases list
-export type STRStatusType = 'no_str' | 'draft_in_progress' | 'str_ready' | 'str_downloaded' | 'discarded';
+// Backend strs.status of the case's latest STR (null when none exists).
+export type CaseStrStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SUBMITTED';
 
 export interface Case {
   id: string;
+  caseNumber?: string;
+  // The alert whose escalation created this case.
+  alertId?: string;
   title?: string;
   linkedAlerts: string[];
   linkedAlertDetails?: CaseLinkedAlert[];
@@ -97,9 +101,15 @@ export interface Case {
   investigatorId?: string;
   investigatorName?: string;
   assignedTo?: string;
+  assignedToUserId?: number;
   status: CaseStatus;
   priority?: RiskLevel;
-  strStatus?: STRStatusType;
+  priorityScore?: number;
+  ruleScore?: number;
+  mlScore?: number;
+  strStatus?: CaseStrStatus | null;
+  summary?: string;
+  closedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   slaDeadline: Date;
@@ -130,6 +140,17 @@ export interface Case {
   customerIndustryCode?: string;
   customerOccupation?: string;
   customerSince?: string;
+  customerType?: string;
+  // Latest behavioural snapshot for the customer (the "observed" profile).
+  customerFeatures?: Record<string, number | string | null> | null;
+  // Cached AI summary of the originating alert, if one was generated.
+  alertAiSummary?: {
+    alertSummary: string;
+    riskSignals: { signal: string; description: string }[];
+    profileAnalysis: string;
+    model?: string;
+    generatedAt?: Date;
+  } | null;
 }
 
 export interface CaseFindings {

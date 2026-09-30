@@ -22,28 +22,35 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { STRStatusBadge } from '@/components/shared/STRStatusBadge';
+import { STRStatusBadge } from '@/components/str/STRStatusBadge';
 import { SLATimer } from '@/components/shared/SLATimer';
-import { Case, CaseStatus, STRStatusType } from '@/types';
+import { Case } from '@/types';
+import { formatINRFull } from '@/lib/formatters';
+import { isCaseClosed } from '@/lib/caseStatus';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 type SortField = 'createdAt' | 'strStatus' | 'slaDeadline';
 type SortDirection = 'asc' | 'desc';
 
-const strStatusOrder: Record<STRStatusType, number> = {
-  str_ready: 0,
-  draft_in_progress: 1,
-  no_str: 2,
-  str_downloaded: 3,
-  discarded: 4,
+// APPROVED = approved by the Principal Officer and ready to file with FIU-IND.
+const strStatusOrder: Record<string, number> = {
+  APPROVED: 0,
+  PENDING_APPROVAL: 1,
+  DRAFT: 2,
+  REJECTED: 3,
+  none: 4,
+  SUBMITTED: 5,
 };
+
+const strKey = (c: Case) => c.strStatus || 'none';
 
 export default function CasesPage() {
   const navigate = useNavigate();
-  const { data: casesData, isLoading, error } = useCases();
-  const cases = casesData || [];
-  
+  // Filtering/sorting is client-side, so fetch the full set rather than the API's default page of 50.
+  const { data: casesData, isLoading, error } = useCases({ limit: 500 });
+  const cases = useMemo(() => casesData || [], [casesData]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [strStatusFilter, setStrStatusFilter] = useState<string>('all');
@@ -52,32 +59,31 @@ export default function CasesPage() {
   const [showSTRReadyFirst, setShowSTRReadyFirst] = useState(false);
 
   const filteredAndSortedCases = useMemo(() => {
-    let result = cases.filter((caseItem) => {
+    const q = searchQuery.toLowerCase();
+    const result = cases.filter((caseItem) => {
       const matchesSearch =
-        caseItem.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        caseItem.customerName.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus =
-        statusFilter === 'all' || caseItem.status === statusFilter;
-      const matchesSTRStatus =
-        strStatusFilter === 'all' || caseItem.strStatus === strStatusFilter;
+        caseItem.id.toLowerCase().includes(q) ||
+        (caseItem.caseNumber || '').toLowerCase().includes(q) ||
+        caseItem.customerName.toLowerCase().includes(q) ||
+        (caseItem.alertId || '').toLowerCase().includes(q);
+      const matchesStatus = statusFilter === 'all' || caseItem.status === statusFilter;
+      const matchesSTRStatus = strStatusFilter === 'all' || strKey(caseItem) === strStatusFilter;
       return matchesSearch && matchesStatus && matchesSTRStatus;
     });
 
-    // Sort
     result.sort((a, b) => {
-      // If showSTRReadyFirst is enabled, STR Ready cases always come first
       if (showSTRReadyFirst) {
-        if (a.strStatus === 'str_ready' && b.strStatus !== 'str_ready') return -1;
-        if (a.strStatus !== 'str_ready' && b.strStatus === 'str_ready') return 1;
+        if (a.strStatus === 'APPROVED' && b.strStatus !== 'APPROVED') return -1;
+        if (a.strStatus !== 'APPROVED' && b.strStatus === 'APPROVED') return 1;
       }
 
       let comparison = 0;
       if (sortField === 'strStatus') {
-        comparison = strStatusOrder[a.strStatus] - strStatusOrder[b.strStatus];
+        comparison = strStatusOrder[strKey(a)] - strStatusOrder[strKey(b)];
       } else if (sortField === 'createdAt') {
-        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        comparison = a.createdAt.getTime() - b.createdAt.getTime();
       } else if (sortField === 'slaDeadline') {
-        comparison = new Date(a.slaDeadline).getTime() - new Date(b.slaDeadline).getTime();
+        comparison = a.slaDeadline.getTime() - b.slaDeadline.getTime();
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });
@@ -98,8 +104,8 @@ export default function CasesPage() {
     }
   };
 
-  const strReadyCount = cases.filter((c) => c.strStatus === 'str_ready').length;
-  const draftInProgressCount = cases.filter((c) => c.strStatus === 'draft_in_progress').length;
+  const strReadyCount = cases.filter((c) => c.strStatus === 'APPROVED').length;
+  const draftCount = cases.filter((c) => c.strStatus === 'DRAFT').length;
 
   return (
     <AppLayout>
@@ -113,19 +119,22 @@ export default function CasesPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline" className="badge-status-pending">
+              {cases.filter((c) => c.status === 'open').length} Open
+            </Badge>
             <Badge variant="outline" className="badge-status-in-progress">
-              {cases.filter((c) => c.status === 'investigation').length} Active
+              {cases.filter((c) => c.status === 'in_progress').length} In Progress
             </Badge>
             <Badge variant="outline" className="badge-status-pending">
-              {cases.filter((c) => c.status === 'pending_review').length} Pending Review
+              {cases.filter((c) => c.status === 'under_review').length} STR Under Review
             </Badge>
             {strReadyCount > 0 && (
-              <Badge 
-                variant="outline" 
+              <Badge
+                variant="outline"
                 className="bg-emerald-500/15 text-emerald-700 border-emerald-500/40 dark:text-emerald-400 font-semibold"
               >
                 <FileCheck className="h-3 w-3 mr-1" />
-                {strReadyCount} STR Ready
+                {strReadyCount} STR Ready to File
               </Badge>
             )}
           </div>
@@ -134,27 +143,25 @@ export default function CasesPage() {
         {/* Quick Filter Pills */}
         <div className="flex flex-wrap gap-2">
           <Button
-            variant={strStatusFilter === 'str_ready' ? 'default' : 'outline'}
+            variant={strStatusFilter === 'APPROVED' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setStrStatusFilter(strStatusFilter === 'str_ready' ? 'all' : 'str_ready')}
+            onClick={() => setStrStatusFilter(strStatusFilter === 'APPROVED' ? 'all' : 'APPROVED')}
             className={cn(
-              strStatusFilter === 'str_ready' 
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+              strStatusFilter === 'APPROVED'
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
                 : 'hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950'
             )}
           >
             <FileCheck className="h-4 w-4 mr-1.5" />
-            STR Ready ({strReadyCount})
+            STR Ready to File ({strReadyCount})
           </Button>
           <Button
-            variant={strStatusFilter === 'draft_in_progress' ? 'default' : 'outline'}
+            variant={strStatusFilter === 'DRAFT' ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setStrStatusFilter(strStatusFilter === 'draft_in_progress' ? 'all' : 'draft_in_progress')}
-            className={cn(
-              strStatusFilter === 'draft_in_progress' && 'bg-amber-600 hover:bg-amber-700'
-            )}
+            onClick={() => setStrStatusFilter(strStatusFilter === 'DRAFT' ? 'all' : 'DRAFT')}
+            className={cn(strStatusFilter === 'DRAFT' && 'bg-amber-600 hover:bg-amber-700')}
           >
-            Draft In Progress ({draftInProgressCount})
+            STR Draft In Progress ({draftCount})
           </Button>
           <Button
             variant={showSTRReadyFirst ? 'secondary' : 'outline'}
@@ -171,24 +178,24 @@ export default function CasesPage() {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search cases..."
+              placeholder="Search case no., customer or alert..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9"
             />
           </div>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Case Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Case Status</SelectItem>
               <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="investigation">Investigation</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
               <SelectItem value="str_draft">STR Draft</SelectItem>
-              <SelectItem value="pending_review">Pending Review</SelectItem>
-              <SelectItem value="submitted">Submitted</SelectItem>
-              <SelectItem value="closed">Closed</SelectItem>
+              <SelectItem value="under_review">STR Under Review</SelectItem>
+              <SelectItem value="closed">Closed – True Positive</SelectItem>
+              <SelectItem value="closed_false_positive">Closed – False Positive</SelectItem>
             </SelectContent>
           </Select>
           <Select value={strStatusFilter} onValueChange={setStrStatusFilter}>
@@ -197,11 +204,12 @@ export default function CasesPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All STR Status</SelectItem>
-              <SelectItem value="no_str">No STR</SelectItem>
-              <SelectItem value="draft_in_progress">Draft In Progress</SelectItem>
-              <SelectItem value="str_ready">STR Ready</SelectItem>
-              <SelectItem value="str_downloaded">STR Downloaded</SelectItem>
-              <SelectItem value="discarded">Discarded</SelectItem>
+              <SelectItem value="none">No STR</SelectItem>
+              <SelectItem value="DRAFT">Draft</SelectItem>
+              <SelectItem value="PENDING_APPROVAL">Pending Approval</SelectItem>
+              <SelectItem value="APPROVED">Approved (Ready to File)</SelectItem>
+              <SelectItem value="REJECTED">Rejected</SelectItem>
+              <SelectItem value="SUBMITTED">Submitted</SelectItem>
             </SelectContent>
           </Select>
           <Select value={`${sortField}-${sortDirection}`} onValueChange={(v) => {
@@ -216,7 +224,7 @@ export default function CasesPage() {
               <SelectItem value="createdAt-desc">Newest First</SelectItem>
               <SelectItem value="createdAt-asc">Oldest First</SelectItem>
               <SelectItem value="strStatus-asc">STR Status (Ready First)</SelectItem>
-              <SelectItem value="strStatus-desc">STR Status (No STR First)</SelectItem>
+              <SelectItem value="strStatus-desc">STR Status (Submitted First)</SelectItem>
               <SelectItem value="slaDeadline-asc">SLA (Urgent First)</SelectItem>
               <SelectItem value="slaDeadline-desc">SLA (Most Time First)</SelectItem>
             </SelectContent>
@@ -228,7 +236,7 @@ export default function CasesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[140px]">Case ID</TableHead>
+                <TableHead className="w-[160px]">Case</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Linked Alerts</TableHead>
                 <TableHead>Investigator</TableHead>
@@ -280,11 +288,16 @@ export default function CasesPage() {
                     key={caseItem.id}
                     className={cn(
                       'table-row-interactive',
-                      caseItem.strStatus === 'str_ready' && 'bg-emerald-500/5 hover:bg-emerald-500/10'
+                      caseItem.strStatus === 'APPROVED' && 'bg-emerald-500/5 hover:bg-emerald-500/10'
                     )}
                     onClick={() => handleViewCase(caseItem.id)}
                   >
-                    <TableCell className="font-mono text-sm">{caseItem.id}</TableCell>
+                    <TableCell>
+                      <p className="font-mono text-sm font-medium">{caseItem.caseNumber || caseItem.id}</p>
+                      {caseItem.alertId && (
+                        <p className="font-mono text-xs text-muted-foreground">{caseItem.alertId}</p>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div>
                         <p className="font-medium">{caseItem.customerName}</p>
@@ -293,25 +306,31 @@ export default function CasesPage() {
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">
-                        {caseItem.linkedAlerts.length} alert{caseItem.linkedAlerts.length !== 1 ? 's' : ''}
+                        {caseItem.alertsCount ?? 0} alert{caseItem.alertsCount !== 1 ? 's' : ''}
                       </Badge>
                     </TableCell>
-                    <TableCell>{caseItem.investigatorName || 'Unassigned'}</TableCell>
+                    <TableCell>{caseItem.investigatorName}</TableCell>
                     <TableCell className="text-right font-mono">
-                      {caseItem.totalAmount.toLocaleString()} {caseItem.currency}
+                      {formatINRFull(caseItem.totalAmount)}
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={caseItem.status} size="sm" />
                     </TableCell>
                     <TableCell>
-                      <STRStatusBadge 
-                        status={caseItem.strStatus || 'no_str'} 
-                        size="sm" 
-                        highlighted={caseItem.strStatus === 'str_ready'}
-                      />
+                      {caseItem.strStatus ? (
+                        <STRStatusBadge status={caseItem.strStatus} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">No STR</span>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <SLATimer deadline={caseItem.slaDeadline} />
+                      {isCaseClosed(caseItem.status) ? (
+                        <span className="text-xs text-muted-foreground">
+                          {caseItem.closedAt ? `Closed ${format(caseItem.closedAt, 'MMM dd, yyyy')}` : 'Closed'}
+                        </span>
+                      ) : (
+                        <SLATimer deadline={caseItem.slaDeadline} />
+                      )}
                     </TableCell>
                     <TableCell>
                       <div
@@ -335,12 +354,6 @@ export default function CasesPage() {
             </TableBody>
           </Table>
         </div>
-
-        {filteredAndSortedCases.length === 0 && (
-          <div className="text-center py-12 text-muted-foreground">
-            No cases match your filters.
-          </div>
-        )}
       </div>
     </AppLayout>
   );

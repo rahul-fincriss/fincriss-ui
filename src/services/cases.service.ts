@@ -1,5 +1,5 @@
 import api from '@/lib/api-client';
-import { Case, CaseFindings, CaseLinkedAlert, CaseStatus, CaseTransaction, RiskLevel } from '@/types';
+import { Case, CaseFindings, CaseLinkedAlert, CaseStatus, CaseStrStatus, CaseTransaction, RiskLevel } from '@/types';
 
 function mapFindings(f: any): CaseFindings | undefined {
   if (!f) return undefined;
@@ -57,60 +57,77 @@ export interface ListCasesParams {
 
 export interface UpdateCaseRequest {
   status?: string;
-  assigned_to?: string;
+  assigned_to_user_id?: number;
+  summary?: string;
+}
+
+export type CaseOutcome = 'TRUE_POSITIVE' | 'FALSE_POSITIVE';
+
+export interface CaseAssignee {
+  userId: number;
+  username: string;
+  fullName: string;
+}
+
+// Fields shared by the list, by-customer and detail responses.
+function mapCaseSummary(c: any): Case {
+  const assignee = c.assigned_to_username || undefined;
+  return {
+    id: String(c.case_id ?? c.id),
+    caseNumber: c.case_number,
+    alertId: c.alert_id,
+    title: c.case_number || `Investigation: ${c.customer_name || 'Customer'}`,
+    customerId: String(c.customer_id ?? ''),
+    customerName: c.customer_name || 'Unknown Customer',
+    status: (c.status?.toLowerCase() as CaseStatus) || 'open',
+    priority: (c.priority_level || 'medium').toLowerCase() as RiskLevel,
+    priorityScore: c.priority_score ?? undefined,
+    ruleScore: c.rule_score ?? undefined,
+    mlScore: c.ml_score ?? undefined,
+    strStatus: (c.str_status as CaseStrStatus) ?? null,
+    createdAt: new Date(c.created_at || Date.now()),
+    updatedAt: new Date(c.updated_at || c.created_at || Date.now()),
+    closedAt: c.closed_at ? new Date(c.closed_at) : undefined,
+    assignedTo: assignee,
+    assignedToUserId: c.assigned_to_user_id ?? undefined,
+    investigatorId: c.investigator_id != null ? String(c.investigator_id) : undefined,
+    investigatorName: assignee || 'Unassigned',
+    summary: c.summary || '',
+    description: c.summary || '',
+    alertsCount: c.alerts_count ?? (Array.isArray(c.linked_alerts) ? c.linked_alerts.length : 0),
+    linkedAlerts: [],
+    // The backend has no SLA field yet; assume 3 days from creation.
+    slaDeadline: new Date(new Date(c.created_at || Date.now()).getTime() + 86400000 * 3),
+    totalAmount: c.total_amount ?? c.amount ?? 0,
+    currency: c.currency || 'INR',
+    alertType: c.alert_type,
+    alertDate: c.alert_date ? new Date(c.alert_date) : undefined,
+    customerRiskRating: c.risk_rating,
+    customerIsPep: !!c.is_pep,
+    notes: [],
+    documents: [],
+    transactions: [],
+  };
 }
 
 export const casesService = {
   async listCases(params: ListCasesParams = {}): Promise<Case[]> {
     const response = await api.get('/api/cases', { params });
     const data = response.data;
-    
     const cases = Array.isArray(data) ? data : (data.cases || data.items || []);
-    return cases.map((c: any) => ({
-      id: (c.case_id || c.id).toString(),
-      title: c.title || `Investigation: ${c.customer_name || 'Customer'}`,
-      customerId: (c.customer_id || '').toString(),
-      customerName: c.customer_name || 'Unknown Customer',
-      status: (c.status?.toLowerCase() as CaseStatus) || 'open',
-      priority: (c.priority?.toLowerCase() as RiskLevel) || 'medium',
-      createdAt: new Date(c.created_at || c.timestamp),
-      updatedAt: new Date(c.updated_at || c.created_at || c.timestamp),
-      assignedTo: c.assigned_to,
-      description: c.description || '',
-      alertsCount: c.alerts_count || 0,
-      linkedAlerts: c.linked_alerts || [],
-      slaDeadline: new Date(c.sla_deadline || c.created_at || Date.now() + 86400000 * 3), // Default 3 days
-      totalAmount: c.total_amount || 0,
-      currency: c.currency || 'INR',
-      notes: [],
-      documents: [],
-      transactions: [],
-    }));
+    return cases.map(mapCaseSummary);
   },
 
   async getCase(caseId: string): Promise<Case> {
     const response = await api.get(`/api/cases/${caseId}`);
     const c = response.data;
+    const summary = c.alert_ai_summary;
 
     return {
-      id: (c.case_id || c.id).toString(),
-      title: c.title || c.case_number || `Investigation: ${c.customer_name || 'Customer'}`,
-      customerId: (c.customer_id || '').toString(),
-      customerName: c.customer_name || 'Unknown Customer',
-      status: (c.status?.toLowerCase() as CaseStatus) || 'open',
-      priority: ((c.priority_level || c.priority || 'medium').toLowerCase() as RiskLevel),
-      createdAt: new Date(c.created_at || Date.now()),
-      updatedAt: new Date(c.updated_at || c.created_at || Date.now()),
-      assignedTo: c.assigned_to || c.investigator_id,
-      investigatorId: c.investigator_id,
-      investigatorName: c.investigator_name || c.assigned_to || 'Unassigned',
-      description: c.description || c.summary || '',
-      alertsCount: c.alerts_count || (c.linked_alerts || []).length,
+      ...mapCaseSummary(c),
+      alertsCount: (c.linked_alerts || []).length,
       linkedAlerts: (c.linked_alerts || []).map((a: any) => typeof a === 'string' ? a : a.alert_id || a.id),
       linkedAlertDetails: mapLinkedAlerts(c.linked_alerts),
-      slaDeadline: new Date(c.sla_deadline || new Date(c.created_at || Date.now()).getTime() + 86400000 * 3),
-      totalAmount: c.total_amount || c.amount || 0,
-      currency: c.currency || 'INR',
       notes: (c.notes || []).map((n: any) => ({
         id: String(n.id || Math.random()),
         authorId: n.user_id || '',
@@ -128,16 +145,23 @@ export const casesService = {
       })),
       frozenFindings: mapFindings(c.frozen_findings),
       transactions: mapTransactions(c.transactions),
-      alertType: c.alert_type,
       severity: c.severity,
       scenarioCode: c.scenario_code,
-      alertDate: c.alert_date ? new Date(c.alert_date) : undefined,
-      customerRiskRating: c.risk_rating,
-      customerIsPep: !!c.is_pep,
       customerNationality: c.nationality,
       customerIndustryCode: c.industry_code,
       customerOccupation: c.occupation,
       customerSince: c.customer_since,
+      customerType: c.customer_type,
+      customerFeatures: c.customer_features || null,
+      alertAiSummary: summary
+        ? {
+            alertSummary: summary.alert_summary,
+            riskSignals: summary.risk_signals || [],
+            profileAnalysis: summary.profile_analysis,
+            model: summary.model,
+            generatedAt: summary.generated_at ? new Date(summary.generated_at) : undefined,
+          }
+        : null,
     };
   },
 
@@ -145,33 +169,24 @@ export const casesService = {
     await api.patch(`/api/cases/${caseId}`, request);
   },
 
-  async closeCase(caseId: string, notes: string): Promise<void> {
-    await api.post(`/api/cases/${caseId}/close`, { notes });
+  async closeCase(caseId: string, outcome: CaseOutcome, rationale: string): Promise<void> {
+    await api.post(`/api/cases/${caseId}/close`, { outcome, rationale });
   },
 
   async getCasesByCustomer(customerId: string): Promise<Case[]> {
     const response = await api.get(`/api/customers/${customerId}/cases`);
     const data = response.data;
     const cases = Array.isArray(data) ? data : (data.cases || data.items || []);
-    return cases.map((c: any) => ({
-      id: (c.case_id || c.id).toString(),
-      title: c.title || c.case_number || `Investigation: ${c.customer_name || 'Customer'}`,
-      customerId: (c.customer_id || '').toString(),
-      customerName: c.customer_name || 'Unknown Customer',
-      status: (c.status?.toLowerCase() as CaseStatus) || 'open',
-      priority: ((c.priority_level || c.priority || 'medium').toLowerCase() as RiskLevel),
-      createdAt: new Date(c.created_at || Date.now()),
-      updatedAt: new Date(c.updated_at || c.created_at || Date.now()),
-      assignedTo: c.assigned_to_username || c.assigned_to,
-      description: c.summary || c.description || '',
-      alertsCount: c.alerts_count || 0,
-      linkedAlerts: c.linked_alerts || [],
-      slaDeadline: new Date(c.sla_deadline || new Date(c.created_at || Date.now()).getTime() + 86400000 * 3),
-      totalAmount: c.total_amount || c.amount || 0,
-      currency: c.currency || 'INR',
-      notes: [],
-      documents: [],
-      transactions: [],
+    return cases.map(mapCaseSummary);
+  },
+
+  // Active users whose role grants cases:write (requires cases:write).
+  async listAssignees(): Promise<CaseAssignee[]> {
+    const response = await api.get('/api/cases/assignees');
+    return (response.data?.users || []).map((u: any) => ({
+      userId: u.user_id,
+      username: u.username,
+      fullName: u.full_name,
     }));
   },
 

@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { casesService, ListCasesParams, UpdateCaseRequest } from '@/services/cases.service';
-import { Case } from '@/types';
+import { casesService, CaseOutcome, ListCasesParams, UpdateCaseRequest } from '@/services/cases.service';
 import { toast } from 'sonner';
 
 export function useCases(params: ListCasesParams = {}) {
@@ -36,6 +35,15 @@ export function useUpdateCase() {
   });
 }
 
+export function useCaseAssignees(enabled = true) {
+  return useQuery({
+    queryKey: ['case-assignees'],
+    queryFn: () => casesService.listAssignees(),
+    enabled,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useCasesByCustomer(customerId?: string) {
   return useQuery({
     queryKey: ['cases', 'customer', customerId],
@@ -66,8 +74,8 @@ export function useCloseCase() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ caseId, notes }: { caseId: string; notes: string }) =>
-      casesService.closeCase(caseId, notes),
+    mutationFn: ({ caseId, outcome, rationale }: { caseId: string; outcome: CaseOutcome; rationale: string }) =>
+      casesService.closeCase(caseId, outcome, rationale),
     onSuccess: (_, { caseId }) => {
       queryClient.invalidateQueries({ queryKey: ['cases'] });
       queryClient.invalidateQueries({ queryKey: ['case', caseId] });

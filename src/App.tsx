@@ -15,7 +15,8 @@ import STRReviewQueuePage from "./pages/STRReviewQueuePage";
 import CasesPage from "./pages/CasesPage";
 import CaseWorkspacePage from "./pages/CaseWorkspacePage";
 import AuditTrailPage from "./pages/AuditTrailPage";
-import MLModelStatusPage from "./pages/MLModelStatusPage";
+import ModelGovernancePage from "./pages/ModelGovernancePage";
+import ModelGovernancePrintPage from "./pages/ModelGovernancePrintPage";
 import RulesEnginePage from "./pages/RulesEnginePage";
 import ReferenceDataPage from "./pages/ReferenceDataPage";
 import Customer360Page from "./pages/Customer360Page";
@@ -50,7 +51,8 @@ function AppRoutes() {
       <Route path="/cases/:caseId" element={<ProtectedRoute><CaseWorkspacePage /></ProtectedRoute>} />
       <Route path="/str" element={<ProtectedRoute><STRReviewQueuePage /></ProtectedRoute>} />
       <Route path="/audit" element={<ProtectedRoute><AuditTrailPage /></ProtectedRoute>} />
-      <Route path="/ml-status" element={<ProtectedRoute><MLModelStatusPage /></ProtectedRoute>} />
+      <Route path="/ml-status" element={<ProtectedRoute><ModelGovernancePage /></ProtectedRoute>} />
+      <Route path="/ml-status/print" element={<ProtectedRoute><ModelGovernancePrintPage /></ProtectedRoute>} />
       {/* Redirect legacy routes */}
       <Route path="/mlops" element={<Navigate to="/ml-status" replace />} />
       <Route path="/model-tuning" element={<Navigate to="/ml-status" replace />} />

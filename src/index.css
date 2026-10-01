@@ -82,6 +82,10 @@
     --chart-4: 0 72% 51%;
     --chart-5: 262 83% 58%;
 
+    /* Model governance charts: CVD-validated pair (dataviz validator, light on #fff) */
+    --viz-1: #2a78d6;
+    --viz-2: #eb6834;
+
     /* Gradient definitions */
     --gradient-primary: linear-gradient(135deg, hsl(217 91% 50%), hsl(217 91% 40%));
     --gradient-risk-high: linear-gradient(135deg, hsl(0 72% 51%), hsl(0 72% 40%));
@@ -165,6 +169,10 @@
     --chart-3: 38 92% 50%;
     --chart-4: 0 72% 51%;
     --chart-5: 262 83% 58%;
+
+    /* Model governance charts: dark steps, validated on the dark card surface */
+    --viz-1: #3987e5;
+    --viz-2: #d95926;
 
     /* Gradient definitions */
     --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 45%));

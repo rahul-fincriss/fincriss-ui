@@ -8,7 +8,7 @@ import {
   History,
   LayoutDashboard,
   Inbox,
-  Server,
+  ShieldCheck,
   Settings,
   Shield,
   UserSearch,
@@ -87,10 +87,10 @@ const navItems: NavItem[] = [
     roles: ['compliance', 'super_admin'],
   },
   {
-    title: 'ML Model Status',
+    title: 'Model Governance',
     url: '/ml-status',
-    icon: Server,
-    roles: ['super_admin'],
+    icon: ShieldCheck,
+    roles: ['super_admin', 'principal_officer', 'compliance'],
   },
   {
     title: 'Reference Data',

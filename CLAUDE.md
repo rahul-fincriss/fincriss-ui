@@ -54,7 +54,7 @@ Services handle API response normalization (snake_case → camelCase, paginated 
 
 All routes under `/` except `/login` are protected. Role-based nav is driven by `useAuth().user.role` (`analyst | investigator | principal_officer | compliance | super_admin`).
 
-Key routes: `/dashboard`, `/alerts/workbench`, `/alerts/:alertId`, `/cases`, `/cases/:caseId`, `/audit`, `/mlops`, `/model-tuning`, `/workforce`, `/settings`.
+Key routes: `/dashboard`, `/alerts/workbench`, `/alerts/:alertId`, `/cases`, `/cases/:caseId`, `/audit`, `/ml-status` (Model Governance; `/mlops` and `/model-tuning` redirect here), `/workforce`, `/settings`.
 
 ### TypeScript Notes
 

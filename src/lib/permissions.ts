@@ -21,8 +21,9 @@ const ROLE_FALLBACK: Record<string, string[]> = {
   principal_officer: [
     'alerts:read', 'alerts:write', 'cases:read', 'cases:write', 'cases:close',
     'str:read', 'str:write', 'str:approve', 'rules:read', 'reference:read', 'audit_log:read',
+    'model:read', 'model:approve',
   ],
-  compliance: ['alerts:read', 'cases:read', 'str:read', 'rules:read', 'reference:read', 'audit_log:read'],
+  compliance: ['alerts:read', 'cases:read', 'str:read', 'rules:read', 'reference:read', 'audit_log:read', 'model:read'],
 };
 
 export function hasPermission(user: User | null | undefined, permission: string): boolean {
@@ -63,4 +64,19 @@ export function canApproveStr(user: User | null | undefined): boolean {
 
 export function canReadStr(user: User | null | undefined): boolean {
   return hasPermission(user, 'str:read');
+}
+
+export function canTrainModel(user: User | null | undefined): boolean {
+  return hasPermission(user, 'model:train');
+}
+
+/**
+ * Approving a model is deliberately not implied by super_admin: the backend
+ * grants model:approve to Principal Officers only (maker-checker).
+ */
+export function canApproveModel(user: User | null | undefined): boolean {
+  if (!user) return false;
+  const perms =
+    user.permissions && user.permissions.length > 0 ? user.permissions : ROLE_FALLBACK[user.role] || [];
+  return perms.includes('model:approve');
 }

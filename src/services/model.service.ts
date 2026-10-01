@@ -26,6 +26,15 @@ export interface ValidationMetrics {
   testSetAnalystOnly: EvaluationMetrics | null;
   candidatesRocAuc: Record<string, number>;
   trainSamples: number;
+  /** The model that was ACTIVE at training time, scored on the same test alerts. */
+  comparison: {
+    version: string;
+    testSet: EvaluationMetrics | null;
+    testSetAnalystOnly: EvaluationMetrics | null;
+    note?: string;
+    error?: string;
+  } | null;
+  worseThanActive: boolean;
 }
 
 export interface TrainingData {
@@ -101,7 +110,67 @@ export interface ModelMonitoring {
   investigatorLabelsSinceActiveModel: number;
 }
 
+export type TrainingJobStatus = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED';
+
+export interface TrainingJob {
+  id: number;
+  status: TrainingJobStatus;
+  reason: string;
+  requestedByName?: string;
+  requestedAt?: Date;
+  startedAt?: Date;
+  finishedAt?: Date;
+  version?: string;
+  error?: string;
+}
+
+export interface PromotionRequest {
+  id: number;
+  version: string;
+  kind: 'PROMOTE' | 'ROLLBACK';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason: string;
+  requestedBy: string;
+  requestedByName?: string;
+  requestedAt?: Date;
+  decidedByName?: string;
+  decidedAt?: Date;
+  decisionNote?: string;
+  replacedVersion?: string;
+}
+
 const toDate = (v: any): Date | undefined => (v ? new Date(v) : undefined);
+
+function mapJob(j: any): TrainingJob {
+  return {
+    id: j.id,
+    status: j.status,
+    reason: j.reason,
+    requestedByName: j.requested_by_name ?? undefined,
+    requestedAt: toDate(j.requested_at),
+    startedAt: toDate(j.started_at),
+    finishedAt: toDate(j.finished_at),
+    version: j.version ?? undefined,
+    error: j.error ?? undefined,
+  };
+}
+
+function mapPromotion(p: any): PromotionRequest {
+  return {
+    id: p.id,
+    version: p.version,
+    kind: p.kind,
+    status: p.status,
+    reason: p.reason,
+    requestedBy: String(p.requested_by),
+    requestedByName: p.requested_by_name ?? undefined,
+    requestedAt: toDate(p.requested_at),
+    decidedByName: p.decided_by_name ?? undefined,
+    decidedAt: toDate(p.decided_at),
+    decisionNote: p.decision_note ?? undefined,
+    replacedVersion: p.replaced_version ?? undefined,
+  };
+}
 
 function mapEval(m: any): EvaluationMetrics | null {
   if (!m) return null;
@@ -133,6 +202,16 @@ export function mapVersion(v: any): ModelVersion {
           testSetAnalystOnly: mapEval(m.test_set_analyst_labels_only),
           candidatesRocAuc: m.candidates_roc_auc || {},
           trainSamples: Number(m.train_samples ?? 0),
+          comparison: m.comparison
+            ? {
+                version: m.comparison.version,
+                testSet: mapEval(m.comparison.test_set),
+                testSetAnalystOnly: mapEval(m.comparison.test_set_analyst_labels_only),
+                note: m.comparison.note,
+                error: m.comparison.error,
+              }
+            : null,
+          worseThanActive: !!m.worse_than_active,
         }
       : null,
     featureImportance: Array.isArray(v.feature_importance) ? v.feature_importance : [],
@@ -213,5 +292,31 @@ export const modelService = {
     if (to) params.to = to;
     const { data } = await api.get('/api/model/monitoring', { params });
     return mapMonitoring(data);
+  },
+
+  async listJobs(limit = 5): Promise<TrainingJob[]> {
+    const { data } = await api.get('/api/model/jobs', { params: { limit } });
+    return (data.jobs || []).map(mapJob);
+  },
+
+  async listPromotions(): Promise<PromotionRequest[]> {
+    const { data } = await api.get('/api/model/promotions');
+    return (data.promotions || []).map(mapPromotion);
+  },
+
+  async requestRetrain(reason: string): Promise<void> {
+    await api.post('/api/model/retrain', { reason });
+  },
+
+  async requestRollback(version: string, reason: string): Promise<void> {
+    await api.post(`/api/model/versions/${encodeURIComponent(version)}/rollback`, { reason });
+  },
+
+  async approve(promotionId: number, note: string): Promise<void> {
+    await api.post(`/api/model/promotions/${promotionId}/approve`, { note });
+  },
+
+  async reject(promotionId: number, note: string): Promise<void> {
+    await api.post(`/api/model/promotions/${promotionId}/reject`, { note });
   },
 };

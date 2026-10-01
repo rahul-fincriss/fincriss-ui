@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/api-client', () => ({
-  default: { get: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn() },
 }));
 
 import api from '@/lib/api-client';
 import { modelService } from './model.service';
 
 const mockGet = api.get as unknown as ReturnType<typeof vi.fn>;
+const mockPost = api.post as unknown as ReturnType<typeof vi.fn>;
 
 const evalSet = (auc: number | null) => ({
   samples: 19, roc_auc: auc, accuracy: 0.42, precision: 0.47, recall: 0.7, f1: 0.56,
@@ -15,7 +16,7 @@ const evalSet = (auc: number | null) => ({
 });
 
 describe('modelService', () => {
-  beforeEach(() => mockGet.mockReset());
+  beforeEach(() => { mockGet.mockReset(); mockPost.mockReset(); });
 
   it('maps a registry version, keeping unrecorded metrics as null', async () => {
     mockGet.mockResolvedValueOnce({
@@ -88,5 +89,58 @@ describe('modelService', () => {
     const s = await modelService.getStatus();
     expect(s.highThreshold).toBe(70);
     expect(s.activeVersion!.version).toBe('ml-1.0');
+  });
+
+  it('maps promotion requests with the requester id as a string', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        promotions: [{
+          id: 2, version: 'ml-1.2', kind: 'PROMOTE', status: 'APPROVED', reason: 'Quarterly review',
+          requested_by: 1, requested_by_name: 'Super Admin', requested_at: '2026-10-01T10:00:00',
+          decided_by_name: 'PO', decided_at: '2026-10-01T11:00:00', decision_note: 'Reviewed',
+          replaced_version: 'ml-1.0',
+        }],
+      },
+    });
+    const [p] = await modelService.listPromotions();
+    expect(p.requestedBy).toBe('1');
+    expect(p.replacedVersion).toBe('ml-1.0');
+    expect(p.decidedAt).toBeInstanceOf(Date);
+  });
+
+  it('maps jobs and the candidate-vs-active comparison', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { jobs: [{ id: 3, status: 'FAILED', reason: 'r', error: 'Only 12 investigator-labelled alerts' }] },
+    });
+    const [job] = await modelService.listJobs();
+    expect(job.error).toContain('investigator-labelled');
+
+    mockGet.mockResolvedValueOnce({
+      data: { versions: [{
+        version: 'ml-1.2', status: 'CANDIDATE',
+        metrics: {
+          test_set: evalSet(0.5), test_set_analyst_labels_only: evalSet(0.42), train_samples: 10,
+          comparison: { version: 'ml-1.0', test_set: evalSet(0.4), test_set_analyst_labels_only: evalSet(0.35) },
+          worse_than_active: false,
+        },
+      }] },
+    });
+    const [v] = await modelService.listVersions();
+    expect(v.metrics!.comparison!.testSetAnalystOnly!.rocAuc).toBe(0.35);
+    expect(v.metrics!.worseThanActive).toBe(false);
+  });
+
+  it('posts retrain, rollback and decisions to the right endpoints', async () => {
+    mockPost.mockResolvedValue({ data: {} });
+    await modelService.requestRetrain('Quarterly review');
+    await modelService.requestRollback('ml-1.0', 'Too many dismissals');
+    await modelService.approve(2, 'Validation reviewed');
+    await modelService.reject(3, 'AUC below live model');
+    expect(mockPost.mock.calls).toEqual([
+      ['/api/model/retrain', { reason: 'Quarterly review' }],
+      ['/api/model/versions/ml-1.0/rollback', { reason: 'Too many dismissals' }],
+      ['/api/model/promotions/2/approve', { note: 'Validation reviewed' }],
+      ['/api/model/promotions/3/reject', { note: 'AUC below live model' }],
+    ]);
   });
 });

@@ -1,13 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FlaskConical, Printer, ShieldCheck } from 'lucide-react';
+import { FlaskConical, Printer, RefreshCw, ShieldCheck } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useRules } from '@/hooks/useRules';
-import { useModelMonitoring, useModelStatus, useModelVersions } from '@/hooks/useModelGovernance';
+import {
+  useModelMonitoring, useModelPromotions, useModelStatus, useModelVersions, useRequestRetrain,
+  useRequestRollback, useTrainingJobs,
+} from '@/hooks/useModelGovernance';
+import { useAuth } from '@/contexts/AuthContext';
+import { canTrainModel } from '@/lib/permissions';
+import { ModelWorkflowPanel } from '@/components/model/ModelWorkflowPanel';
+import { ReasonDialog } from '@/components/model/ReasonDialog';
 import { ModelCardTab } from '@/components/model/ModelCardTab';
 import { ValidationTab } from '@/components/model/ValidationTab';
 import { MonitoringTab } from '@/components/model/MonitoringTab';
@@ -33,7 +40,25 @@ export default function ModelGovernancePage() {
   const { data: versions = [], isLoading: versionsLoading } = useModelVersions();
   const { data: monitoring } = useModelMonitoring();
   const { data: rules } = useRules();
+  const { data: jobs = [] } = useTrainingJobs();
+  const { data: promotions = [] } = useModelPromotions();
+  const { user } = useAuth();
+  const retrain = useRequestRetrain();
+  const rollback = useRequestRollback();
   const [selected, setSelected] = useState<string>('');
+  const [tab, setTab] = useState('card');
+  const [retrainOpen, setRetrainOpen] = useState(false);
+  const [rollbackVersion, setRollbackVersion] = useState<string | null>(null);
+
+  const latestJob = jobs[0];
+  const pending = promotions.find((p) => p.status === 'PENDING');
+  const blockedReason =
+    latestJob && (latestJob.status === 'QUEUED' || latestJob.status === 'RUNNING')
+      ? 'A retrain is already queued or running.'
+      : pending
+        ? `${pending.version} is awaiting a Principal Officer's decision.`
+        : null;
+  const mayTrain = canTrainModel(user);
 
   useEffect(() => {
     if (!selected && status?.activeVersion) setSelected(status.activeVersion.version);
@@ -63,6 +88,13 @@ export default function ModelGovernancePage() {
                 <VersionStatusBadge status={active.status} />
               </div>
             )}
+            {mayTrain && (
+              <Button size="sm" disabled={!!blockedReason} title={blockedReason ?? undefined}
+                      onClick={() => setRetrainOpen(true)}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Request retrain
+              </Button>
+            )}
             <Button variant="outline" size="sm" asChild>
               <Link to="/ml-status/print" target="_blank">
                 <Printer className="mr-2 h-4 w-4" />
@@ -74,10 +106,18 @@ export default function ModelGovernancePage() {
 
         <SyntheticDataNotice share={monitoring?.syntheticShare} />
 
+        <ModelWorkflowPanel
+          latestJob={latestJob}
+          pending={pending}
+          versions={versions}
+          activeVersion={active?.version}
+          onReview={(v) => { setSelected(v); setTab('validation'); }}
+        />
+
         {statusLoading || versionsLoading || !status ? (
           <Skeleton className="h-96" />
         ) : (
-          <Tabs defaultValue="card" className="space-y-6">
+          <Tabs value={tab} onValueChange={setTab} className="space-y-6">
             <TabsList>
               <TabsTrigger value="card">Model card</TabsTrigger>
               <TabsTrigger value="validation">Validation</TabsTrigger>
@@ -89,9 +129,47 @@ export default function ModelGovernancePage() {
               <ValidationTab versions={versions} selected={selected} onSelect={setSelected} />
             </TabsContent>
             <TabsContent value="monitoring"><MonitoringTab /></TabsContent>
-            <TabsContent value="history"><VersionHistoryTab versions={versions} /></TabsContent>
+            <TabsContent value="history">
+              <VersionHistoryTab
+                versions={versions}
+                promotions={promotions}
+                rollback={mayTrain ? { blockedReason, onRequest: setRollbackVersion } : undefined}
+              />
+            </TabsContent>
           </Tabs>
         )}
+
+        <ReasonDialog
+          open={retrainOpen}
+          onOpenChange={setRetrainOpen}
+          title="Request a model retrain"
+          description={<>
+            The training worker builds a new candidate from all labelled alerts and validates it. It does not go
+            live until a Principal Officer approves it. Your reason is recorded in the audit trail.
+          </>}
+          label="Why retrain now?"
+          placeholder="e.g. 120 new investigator decisions since the last version; quarterly model review."
+          confirmLabel="Request retrain"
+          pending={retrain.isPending}
+          onConfirm={(reason) => retrain.mutate(reason, { onSuccess: () => setRetrainOpen(false) })}
+        />
+        <ReasonDialog
+          open={rollbackVersion !== null}
+          onOpenChange={(o) => !o && setRollbackVersion(null)}
+          title={`Request rollback to ${rollbackVersion ?? ''}`}
+          description={<>
+            {rollbackVersion} becomes live again only after a Principal Officer approves the rollback. Alerts already
+            scored keep their scores. Your reason is recorded in the audit trail.
+          </>}
+          label="Why roll back?"
+          placeholder="e.g. Since the last promotion, investigators are dismissing far more HIGH alerts."
+          confirmLabel="Request rollback"
+          pending={rollback.isPending}
+          onConfirm={(reason) => rollback.mutate(
+            { version: rollbackVersion!, reason },
+            { onSuccess: () => setRollbackVersion(null) },
+          )}
+        />
       </div>
     </AppLayout>
   );

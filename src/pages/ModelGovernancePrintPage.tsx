@@ -2,7 +2,9 @@ import { Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRules } from '@/hooks/useRules';
-import { useModelMonitoring, useModelStatus, useModelVersions } from '@/hooks/useModelGovernance';
+import {
+  useModelMonitoring, useModelPromotions, useModelStatus, useModelVersions,
+} from '@/hooks/useModelGovernance';
 import { ModelCardTab } from '@/components/model/ModelCardTab';
 import { ValidationTab } from '@/components/model/ValidationTab';
 import { VersionHistoryTab } from '@/components/model/VersionHistoryTab';
@@ -18,6 +20,7 @@ export default function ModelGovernancePrintPage() {
   const { data: versions = [] } = useModelVersions();
   const { data: monitoring } = useModelMonitoring();
   const { data: rules } = useRules();
+  const { data: promotions = [] } = useModelPromotions();
   const active = status?.activeVersion;
   const generated = new Date().toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' });
 
@@ -54,7 +57,7 @@ export default function ModelGovernancePrintPage() {
           </section>
           <section className="space-y-4 break-before-page">
             <h2 className="border-b pb-2 text-lg font-semibold">3. Version history</h2>
-            <VersionHistoryTab versions={versions} />
+            <VersionHistoryTab versions={versions} promotions={promotions} />
           </section>
         </>
       )}

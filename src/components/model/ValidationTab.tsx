@@ -165,6 +165,25 @@ function ValidationDetail({ v }: { v: ModelVersion }) {
             Heuristic labels come from the customer risk rating, which is also a model input, so results that include
             them are optimistic.
           </p>
+          {m.comparison && (
+            <div className="rounded-md border p-4 text-sm">
+              <p className="font-medium">Compared with {m.comparison.version}, the live model when this was trained</p>
+              {m.comparison.error ? (
+                <p className="text-muted-foreground">{m.comparison.error}</p>
+              ) : (
+                <>
+                  <p className="mt-1">
+                    ROC-AUC on the same investigator-labelled test alerts:{' '}
+                    <strong>{formatAuc(primary.rocAuc)}</strong> for {v.version} vs{' '}
+                    <strong>{formatAuc((m.comparison.testSetAnalystOnly ?? m.comparison.testSet)?.rocAuc)}</strong>{' '}
+                    for {m.comparison.version}
+                    {m.worseThanActive && <span className="text-status-warning"> (this version ranks them worse)</span>}.
+                  </p>
+                  {m.comparison.note && <p className="mt-1 text-xs text-muted-foreground">{m.comparison.note}</p>}
+                </>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

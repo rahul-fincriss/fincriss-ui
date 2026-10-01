@@ -80,3 +80,7 @@ export function canApproveModel(user: User | null | undefined): boolean {
     user.permissions && user.permissions.length > 0 ? user.permissions : ROLE_FALLBACK[user.role] || [];
   return perms.includes('model:approve');
 }
+
+export function canWriteSettings(user: User | null | undefined): boolean {
+  return hasPermission(user, 'settings:write');
+}

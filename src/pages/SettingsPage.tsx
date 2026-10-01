@@ -5,7 +5,9 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Info, Settings2, Route, Clock, Bell, Archive } from 'lucide-react';
+import { Info, Settings2, Route, Clock, Bell, Archive, Bot } from 'lucide-react';
+import { AgentSettingsTab } from '@/components/settings/AgentSettingsTab';
+import { canWriteSettings } from '@/lib/permissions';
 import { GeneralSettingsTab } from '@/components/settings/GeneralSettingsTab';
 import { QueueRoutingSettingsTab } from '@/components/settings/QueueRoutingSettingsTab';
 import { SLASettingsTab } from '@/components/settings/SLASettingsTab';
@@ -22,6 +24,7 @@ export default function SettingsPage() {
   }
 
   const isReadOnly = user.role === 'compliance';
+  const showAgent = canWriteSettings(user);
 
   return (
     <AppLayout>
@@ -54,7 +57,7 @@ export default function SettingsPage() {
 
         {/* Settings Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 h-auto p-1">
+          <TabsList className={`grid w-full h-auto p-1 ${showAgent ? 'grid-cols-6' : 'grid-cols-5'}`}>
             <TabsTrigger value="general" className="flex items-center gap-2 py-2.5">
               <Settings2 className="h-4 w-4" />
               <span className="hidden sm:inline">General</span>
@@ -75,6 +78,12 @@ export default function SettingsPage() {
               <Archive className="h-4 w-4" />
               <span className="hidden sm:inline">Audit & Retention</span>
             </TabsTrigger>
+            {showAgent && (
+              <TabsTrigger value="agent" className="flex items-center gap-2 py-2.5">
+                <Bot className="h-4 w-4" />
+                <span className="hidden sm:inline">AI Assistant</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="general" className="mt-6">
@@ -86,6 +95,11 @@ export default function SettingsPage() {
           <TabsContent value="sla" className="mt-6">
             <SLASettingsTab isReadOnly={isReadOnly} />
           </TabsContent>
+          {showAgent && (
+            <TabsContent value="agent" className="mt-6">
+              <AgentSettingsTab />
+            </TabsContent>
+          )}
           <TabsContent value="notifications" className="mt-6">
             <NotificationSettingsTab isReadOnly={isReadOnly} />
           </TabsContent>

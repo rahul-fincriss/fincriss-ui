@@ -1,26 +1,31 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { X, Minimize2, Send, Bot } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { X, Minimize2, Send, Bot, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/AuthContext';
-import { UserRole } from '@/types';
+import { hasPermission } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
+import { errorDetail, useAgentConversation, useAskAgent } from '@/hooks/useAgent';
+import { AgentSource } from '@/services/agent.service';
 import { AlertAction, AlertAnswer, AnswerBoundary, CaseAction, CaseAnswer, CaseLabel } from './AgentAnswers';
+import { AgentTextAnswer } from './AgentTextAnswer';
 
-// The assistant answers questions about the alert or case on screen, from that
-// record's own data. It is read-only: it never escalates, dismisses, closes or
-// files anything. Free-text questions are step 2 (not built yet).
+// The assistant answers questions about the alert or case on screen, for every
+// role. Quick actions read that record's data directly; free-text questions go
+// to /api/agent/chat, where the server looks things up with the asker's own
+// permissions. It is read-only: it never escalates, dismisses, closes or files.
 
-const AGENT_ROLES: UserRole[] = ['analyst', 'investigator'];
-
-type Context = { type: 'alert'; id: string } | { type: 'case'; id: string };
+type Context = { type: 'alert' | 'case'; id: string };
 
 type Message =
   | { id: string; role: 'agent' | 'user'; text: string }
+  | { id: string; role: 'divider'; context: Context }
+  | { id: string; role: 'agent'; free: { text: string; sources: AgentSource[]; toolsUsed?: string[] } }
   | {
       id: string;
       role: 'agent';
@@ -28,22 +33,20 @@ type Message =
       answer: { kind: 'alert'; action: AlertAction; recordId: string } | { kind: 'case'; action: CaseAction; recordId: string };
     };
 
-const alertQuickActions: { label: string; action: AlertAction }[] = [
-  { label: 'Summarize why flagged', action: 'why-flagged' },
-  { label: 'Show key transactions', action: 'key-transactions' },
-  { label: 'Explain risk drivers', action: 'risk-drivers' },
-  { label: 'View raw payload', action: 'raw-payload' },
+// Each quick action needs the permissions to read what it shows.
+const alertQuickActions: { label: string; action: AlertAction; needs: string[] }[] = [
+  { label: 'Summarize why flagged', action: 'why-flagged', needs: ['alerts:read'] },
+  { label: 'Show key transactions', action: 'key-transactions', needs: ['alerts:read', 'customers:read'] },
+  { label: 'Explain risk drivers', action: 'risk-drivers', needs: ['alerts:read'] },
+  { label: 'View raw payload', action: 'raw-payload', needs: ['alerts:read'] },
 ];
 
-const caseQuickActions: { label: string; action: CaseAction }[] = [
-  { label: 'Case summary', action: 'case-summary' },
-  { label: 'Evidence checklist', action: 'evidence-checklist' },
-  { label: 'Draft STR points', action: 'str-points' },
-  { label: 'Show related alerts', action: 'related-alerts' },
+const caseQuickActions: { label: string; action: CaseAction; needs: string[] }[] = [
+  { label: 'Case summary', action: 'case-summary', needs: ['cases:read'] },
+  { label: 'Evidence checklist', action: 'evidence-checklist', needs: ['cases:read'] },
+  { label: 'Draft STR points', action: 'str-points', needs: ['cases:read', 'str:read'] },
+  { label: 'Show related alerts', action: 'related-alerts', needs: ['cases:read', 'customers:read'] },
 ];
-
-const COMING_SOON =
-  'Free-text questions are coming soon. For now, use the quick actions above: they answer from this record\'s own data.';
 
 function getContextFromPath(pathname: string): Context | null {
   const alertMatch = pathname.match(/^\/alerts\/([^/]+)$/);
@@ -55,8 +58,13 @@ function getContextFromPath(pathname: string): Context | null {
 
 function greeting(userName: string, context: Context): string {
   const firstName = userName.split(' ')[0];
-  const subject = context.type === 'alert' ? `alert ${context.id}` : `this case`;
-  return `Hi ${firstName}. I can pull together details about ${subject} from its own records. Pick a question below.`;
+  const subject = context.type === 'alert' ? `alert ${context.id}` : 'this case';
+  return `Hi ${firstName}. Ask me anything about ${subject}, or pick a quick question below. ` +
+    "I look things up with your own access rights and I can't change anything.";
+}
+
+function ContextName({ context }: { context: Context }) {
+  return context.type === 'alert' ? <>Alert {context.id}</> : <CaseLabel caseId={context.id} />;
 }
 
 let seq = 0;
@@ -67,33 +75,61 @@ export function FinCrissAgent() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [questionsLeft, setQuestionsLeft] = useState<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const loadedRef = useRef(false);
+  const prevContext = useRef<string | null>(null);
   const { user } = useAuth();
   const location = useLocation();
+  const qc = useQueryClient();
+  const askAgent = useAskAgent();
 
   const context = getContextFromPath(location.pathname);
   const contextKey = context ? `${context.type}:${context.id}` : null;
+  const { data: conversation } = useAgentConversation(user?.id, isOpen && !!user && !!context);
 
-  // Start a fresh conversation when the chat opens or the record changes. Keyed
-  // on the user's id, not the user object: the auth layer re-fetches the user
-  // after load, and a new object must not wipe the conversation.
+  // On open: the greeting, then this sign-in's earlier questions and answers.
   useEffect(() => {
-    if (isOpen && user && context) {
-      setMessages([{ id: nextId(), role: 'agent', text: greeting(user.name, context) }]);
+    if (!isOpen || !user || !context || !conversation || loadedRef.current) return;
+    loadedRef.current = true;
+    const restored: Message[] = [];
+    let last: string | null = null;
+    for (const m of conversation.messages) {
+      const key = m.contextType ? `${m.contextType}:${m.contextId}` : null;
+      if (key && key !== last && m.contextType) {
+        restored.push({ id: nextId(), role: 'divider', context: { type: m.contextType, id: m.contextId! } });
+        last = key;
+      }
+      restored.push(m.role === 'user'
+        ? { id: nextId(), role: 'user', text: m.content }
+        : { id: nextId(), role: 'agent', free: { text: m.content, sources: m.sources } });
     }
+    if (restored.length && last !== contextKey) restored.push({ id: nextId(), role: 'divider', context });
+    setMessages([{ id: nextId(), role: 'agent', text: greeting(user.name, context) }, ...restored]);
+    setQuestionsLeft(conversation.questionsLeft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, contextKey, user?.id]);
+  }, [isOpen, conversation, user?.id]);
 
-  // Bring the newest question to the top of the panel; its answer (which loads
-  // and grows after a moment) then unfolds in view below it.
+  // A new record while the panel stays open: mark the switch.
+  useEffect(() => {
+    if (prevContext.current && contextKey && prevContext.current !== contextKey && context && messages.length) {
+      setMessages((prev) => [...prev, { id: nextId(), role: 'divider', context }]);
+    }
+    prevContext.current = contextKey;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contextKey]);
+
+  // Bring the newest question to the top of the panel; its answer unfolds below it.
   useEffect(() => {
     const asked = listRef.current?.querySelectorAll('[data-role="user"]');
     asked?.[asked.length - 1]?.scrollIntoView({ block: 'start' });
   }, [messages.length]);
 
-  if (!user || !AGENT_ROLES.includes(user.role) || !context) return null;
+  if (!user || !context) return null;
 
-  const quickActions = context.type === 'alert' ? alertQuickActions : caseQuickActions;
+  const all = context.type === 'alert' ? alertQuickActions : caseQuickActions;
+  const quickActions = all.filter((qa) => qa.needs.every((p) => hasPermission(user, p)));
+  const freeTextEnabled = conversation?.enabled ?? true;
 
   const ask = (label: string, action: AlertAction | CaseAction) => {
     setMessages((prev) => [
@@ -106,13 +142,22 @@ export function FinCrissAgent() {
   };
 
   const handleSend = (content: string) => {
-    if (!content.trim()) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: nextId(), role: 'user', text: content.trim() },
-      { id: nextId(), role: 'agent', text: COMING_SOON },
-    ]);
+    const message = content.trim();
+    if (message.length < 2 || askAgent.isPending) return;
+    setMessages((prev) => [...prev, { id: nextId(), role: 'user', text: message }]);
     setInputValue('');
+    askAgent.mutate({ message, context }, {
+      onSuccess: (a) => {
+        setMessages((prev) => [...prev, { id: nextId(), role: 'agent',
+          free: { text: a.answer, sources: a.sources, toolsUsed: a.toolsUsed } }]);
+        setQuestionsLeft((n) => (n == null ? n : Math.max(0, n - 1)));
+        qc.invalidateQueries({ queryKey: ['agent-conversation'] });
+      },
+      onError: (e: any) => {
+        setMessages((prev) => [...prev, { id: nextId(), role: 'agent',
+          text: errorDetail(e, "I couldn't answer just now. Please try again.") }]);
+      },
+    });
   };
 
   return (
@@ -153,8 +198,7 @@ export function FinCrissAgent() {
                         onClick={() => { setIsMinimized(true); setIsOpen(false); }}>
                   <Minimize2 className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8"
-                        onClick={() => { setIsOpen(false); setMessages([]); }}>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsOpen(false)}>
                   <X className="h-4 w-4" />
                 </Button>
               </div>
@@ -165,55 +209,85 @@ export function FinCrissAgent() {
             <div className="flex items-center gap-2 text-xs">
               <span className="text-muted-foreground">Context:</span>
               <span className="font-medium px-2 py-0.5 rounded bg-primary/10 text-primary">
-                {context.type === 'alert' ? `Alert ${context.id}` : <CaseLabel caseId={context.id} />}
+                <ContextName context={context} />
               </span>
             </div>
           </div>
 
           <ScrollArea className="flex-1 px-4 py-4">
             <div ref={listRef} className="space-y-4">
-              {messages.map((m) => (
-                <div key={m.id} data-role={m.role}
-                     className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
-                  <div className={cn(
-                    'rounded-lg px-3 py-2 text-sm',
-                    m.role === 'user' ? 'max-w-[85%] bg-primary text-primary-foreground' : 'w-full max-w-[95%] bg-muted text-foreground'
-                  )}>
-                    {'answer' in m ? (
-                      <AnswerBoundary>
-                        {m.answer.kind === 'alert'
-                          ? <AlertAnswer action={m.answer.action} alertId={m.answer.recordId} />
-                          : <CaseAnswer action={m.answer.action} caseId={m.answer.recordId} />}
-                      </AnswerBoundary>
-                    ) : (
-                      <p className="whitespace-pre-line">{m.text}</p>
-                    )}
+              {messages.map((m) => {
+                if (m.role === 'divider') {
+                  return (
+                    <div key={m.id} className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <div className="h-px flex-1 bg-border" />
+                      <span>Now looking at <ContextName context={m.context} /></span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
+                  );
+                }
+                return (
+                  <div key={m.id} data-role={m.role}
+                       className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+                    <div className={cn(
+                      'rounded-lg px-3 py-2 text-sm',
+                      m.role === 'user' ? 'max-w-[85%] bg-primary text-primary-foreground' : 'w-full max-w-[95%] bg-muted text-foreground'
+                    )}>
+                      {'answer' in m ? (
+                        <AnswerBoundary>
+                          {m.answer.kind === 'alert'
+                            ? <AlertAnswer action={m.answer.action} alertId={m.answer.recordId} />
+                            : <CaseAnswer action={m.answer.action} caseId={m.answer.recordId} />}
+                        </AnswerBoundary>
+                      ) : 'free' in m ? (
+                        <AnswerBoundary>
+                          <AgentTextAnswer text={m.free.text} sources={m.free.sources} toolsUsed={m.free.toolsUsed} />
+                        </AnswerBoundary>
+                      ) : (
+                        <p className="whitespace-pre-line">{m.text}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {askAgent.isPending && (
+                <div className="flex justify-start">
+                  <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />Looking into it…
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           </ScrollArea>
 
-          <div className="space-y-3 p-4 border-t border-border bg-background">
-            <div className="flex flex-wrap gap-2">
-              {quickActions.map((qa) => (
-                <Button key={qa.action} variant="outline" size="sm" className="h-7 text-xs"
-                        onClick={() => ask(qa.label, qa.action)}>
-                  {qa.label}
-                </Button>
-              ))}
-            </div>
+          <div className="space-y-2 p-4 border-t border-border bg-background">
+            {quickActions.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {quickActions.map((qa) => (
+                  <Button key={qa.action} variant="outline" size="sm" className="h-7 text-xs"
+                          onClick={() => ask(qa.label, qa.action)}>
+                    {qa.label}
+                  </Button>
+                ))}
+              </div>
+            )}
             <form onSubmit={(e) => { e.preventDefault(); handleSend(inputValue); }} className="flex gap-2">
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder="Free-text questions coming soon"
+                placeholder={freeTextEnabled ? 'Ask about this record…' : 'Free-text questions are switched off'}
+                disabled={!freeTextEnabled || askAgent.isPending}
+                maxLength={1000}
                 className="flex-1"
               />
-              <Button type="submit" size="icon" disabled={!inputValue.trim()}>
+              <Button type="submit" size="icon"
+                      disabled={!freeTextEnabled || inputValue.trim().length < 2 || askAgent.isPending}>
                 <Send className="h-4 w-4" />
               </Button>
             </form>
+            {freeTextEnabled && questionsLeft != null && (
+              <p className="text-[11px] text-muted-foreground">{questionsLeft} question{questionsLeft === 1 ? '' : 's'} left this hour</p>
+            )}
           </div>
         </SheetContent>
       </Sheet>

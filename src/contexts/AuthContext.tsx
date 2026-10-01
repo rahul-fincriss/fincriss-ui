@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { User, UserRole } from "@/types";
 import { authService } from "@/services/auth.service";
+import { agentService } from '@/services/agent.service';
 
 interface AuthContextType {
   user: User | null;
@@ -58,6 +59,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    // End the assistant's conversation for this sign-in; the next one starts fresh.
+    try {
+      await agentService.endConversation();
+    } catch {
+      // best effort: an unended conversation also expires after 12 idle hours
+    }
     const refreshToken = localStorage.getItem('refresh_token');
     if (refreshToken) {
       try {

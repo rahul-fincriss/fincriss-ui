@@ -30,3 +30,11 @@ export function useCustomerTransactions(customerId: string | null, params: Trans
     enabled: !!customerId,
   });
 }
+
+export function useCustomerAlerts(customerId: string | null) {
+  return useQuery({
+    queryKey: ['customer-alerts', customerId],
+    queryFn: () => customer360Service.getAlertHistory(customerId!),
+    enabled: !!customerId,
+  });
+}

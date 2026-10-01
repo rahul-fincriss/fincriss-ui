@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowLeft,
@@ -61,7 +61,13 @@ export default function CaseWorkspacePage() {
   const { user } = useAuth();
   const [newNote, setNewNote] = useState('');
   const [closeOpen, setCloseOpen] = useState(false);
-  const [tab, setTab] = useState('overview');
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(searchParams.get('tab') || 'overview');
+  // Links such as /cases/12?tab=narrative (e.g. from the FinCrisS Agent) open that tab.
+  useEffect(() => {
+    const requested = searchParams.get('tab');
+    if (requested) setTab(requested);
+  }, [searchParams]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canWrite = canWriteCases(user);

@@ -78,6 +78,8 @@ export const alertsService = {
       scoredAt: alert.scored_at,
       investigatedAt: alert.investigated_at,
       alertDate: alert.alert_date,
+      transId: alert.trans_id ?? undefined,
+      rawData: alert.raw_data ?? null,
       // Nested customer object
       customer: alert.customer ? {
         customerId: alert.customer.customer_id,

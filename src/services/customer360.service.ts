@@ -242,6 +242,18 @@ export interface Customer360Transaction {
   channel?: string;
 }
 
+export interface CustomerAlertSummary {
+  alertId: string;
+  scenarioCode?: string;
+  alertType?: string;
+  alertDate?: Date;
+  amount?: number;
+  currency?: string;
+  priorityLevel?: string;
+  priorityScore?: number;
+  workflowStatus?: string;
+}
+
 export interface TransactionsResponse {
   total: number;
   transactions: Customer360Transaction[];
@@ -611,6 +623,22 @@ export const customer360Service = {
   async getAlerts(customerId: string, params?: { severity?: string; limit?: number; offset?: number }) {
     const response = await api.get(`/api/customers/${customerId}/alerts`, { params });
     return response.data;
+  },
+
+  /** The customer's alerts, newest first, normalised (workflowStatus is the analyst workflow state). */
+  async getAlertHistory(customerId: string, limit = 50): Promise<CustomerAlertSummary[]> {
+    const response = await api.get(`/api/customers/${customerId}/alerts`, { params: { limit } });
+    return (response.data.alerts || []).map((a: any) => ({
+      alertId: a.alert_id,
+      scenarioCode: a.scenario_code ?? undefined,
+      alertType: a.alert_type ?? undefined,
+      alertDate: a.alert_date ? new Date(a.alert_date) : undefined,
+      amount: a.amount != null ? Number(a.amount) : undefined,
+      currency: a.currency ?? undefined,
+      priorityLevel: a.priority_level ?? undefined,
+      priorityScore: a.priority_score != null ? Number(a.priority_score) : undefined,
+      workflowStatus: a.alert_workflow_status ?? undefined,
+    }));
   },
 
   async getCases(customerId: string, params?: { status?: string }) {

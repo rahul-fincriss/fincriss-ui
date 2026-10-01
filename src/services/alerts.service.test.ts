@@ -88,3 +88,17 @@ describe('alert notes', () => {
     expect(mockPost).toHaveBeenCalledWith('/api/alerts/A/notes', { note: 'flagged' });
   });
 });
+
+describe('alert detail for the FinCrisS Agent', () => {
+  it('maps the raw payload and the alert transaction id', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: {
+        alert_id: 'ALT1', alert_date: '2026-04-06T10:00:00', priority_level: 'HIGH',
+        trans_id: 'TXN42', raw_data: { channel: 'SWIFT', scenario: 'DORMANT' },
+      },
+    });
+    const a: any = await alertsService.getAlert('ALT1');
+    expect(a.transId).toBe('TXN42');
+    expect(a.rawData).toEqual({ channel: 'SWIFT', scenario: 'DORMANT' });
+  });
+});

@@ -1,6 +1,6 @@
 import api from '@/lib/api-client';
 
-export type AgentContextType = 'alert' | 'case';
+export type AgentContextType = 'alert' | 'case' | 'page';
 
 export interface AgentSource {
   kind: string;

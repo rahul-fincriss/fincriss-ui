@@ -15,12 +15,58 @@ import { AgentSource } from '@/services/agent.service';
 import { AlertAction, AlertAnswer, AnswerBoundary, CaseAction, CaseAnswer, CaseLabel } from './AgentAnswers';
 import { AgentTextAnswer } from './AgentTextAnswer';
 
-// The assistant answers questions about the alert or case on screen, for every
-// role. Quick actions read that record's data directly; free-text questions go
-// to /api/agent/chat, where the server looks things up with the asker's own
-// permissions. It is read-only: it never escalates, dismisses, closes or files.
+// The assistant is on every page, for every role. On an alert or case it answers
+// about that record (quick actions read its data directly); elsewhere it answers
+// about the work in front of the user. Free-text questions go to /api/agent/chat,
+// where the server looks things up with the asker's own permissions. It is
+// read-only: it never escalates, dismisses, closes or files.
 
-type Context = { type: 'alert' | 'case'; id: string };
+type Context = { type: 'alert' | 'case' | 'page'; id: string };
+
+// Pages without a record: route → page key the API knows, and a display name.
+const PAGES: { path: string; key: string; name: string }[] = [
+  { path: '/dashboard', key: 'dashboard', name: 'Dashboard' },
+  { path: '/alerts/workbench', key: 'workbench', name: 'Alert workbench' },
+  { path: '/triage', key: 'triage', name: 'Triage queue' },
+  { path: '/cases', key: 'cases', name: 'Cases' },
+  { path: '/str', key: 'str', name: 'STR reports' },
+  { path: '/customers', key: 'customers', name: 'Customer 360' },
+  { path: '/audit', key: 'audit', name: 'Audit trail' },
+  { path: '/ml-status', key: 'model', name: 'Model governance' },
+  { path: '/rules-engine', key: 'rules', name: 'Rules engine' },
+  { path: '/reference-data', key: 'reference', name: 'Reference data' },
+  { path: '/workforce', key: 'workforce', name: 'Workforce' },
+  { path: '/settings', key: 'settings', name: 'Settings' },
+];
+const pageName = (key: string) => PAGES.find((p) => p.key === key)?.name ?? key;
+
+// Suggested questions per page, shown only when the role can see the answer.
+const PAGE_SUGGESTIONS: Record<string, { text: string; needs: string[] }[]> = {
+  dashboard: [
+    { text: "What's in my queue, oldest first?", needs: ['alerts:read'] },
+    { text: 'How many HIGH alerts are unassigned?', needs: ['alerts:read'] },
+    { text: 'Which STRs are waiting for approval?', needs: ['str:read'] },
+  ],
+  workbench: [
+    { text: 'What are the oldest HIGH alerts not yet started?', needs: ['alerts:read'] },
+    { text: "What's in my queue, oldest first?", needs: ['alerts:read'] },
+  ],
+  triage: [
+    { text: 'How many HIGH alerts are unassigned, and how old is the oldest?', needs: ['alerts:read'] },
+    { text: 'Who on the team has the most open work?', needs: ['alerts:assign'] },
+  ],
+  cases: [
+    { text: 'Which open cases have no one assigned?', needs: ['cases:read'] },
+    { text: 'Which cases have an STR in progress?', needs: ['cases:read'] },
+  ],
+  str: [
+    { text: 'Which STRs are waiting for my approval?', needs: ['str:approve'] },
+    { text: 'Which STRs are still in draft?', needs: ['str:read'] },
+  ],
+  audit: [{ text: 'What were the most common actions this month?', needs: ['audit_log:read'] }],
+  model: [{ text: "What's the state of the scoring model? Is anything pending?", needs: ['model:read'] }],
+};
+const DEFAULT_SUGGESTIONS = [{ text: "What's in my queue, oldest first?", needs: ['alerts:read'] }];
 
 type Message =
   | { id: string; role: 'agent' | 'user'; text: string }
@@ -53,18 +99,22 @@ function getContextFromPath(pathname: string): Context | null {
   if (alertMatch && alertMatch[1] !== 'workbench') return { type: 'alert', id: decodeURIComponent(alertMatch[1]) };
   const caseMatch = pathname.match(/^\/cases\/([^/]+)$/);
   if (caseMatch) return { type: 'case', id: decodeURIComponent(caseMatch[1]) };
-  return null;
+  const page = PAGES.find((p) => pathname === p.path);
+  return page ? { type: 'page', id: page.key } : null;
 }
 
 function greeting(userName: string, context: Context): string {
   const firstName = userName.split(' ')[0];
-  const subject = context.type === 'alert' ? `alert ${context.id}` : 'this case';
-  return `Hi ${firstName}. Ask me anything about ${subject}, or pick a quick question below. ` +
+  const subject = context.type === 'alert' ? `alert ${context.id}`
+    : context.type === 'case' ? 'this case' : 'your work: queues, alerts, cases and more';
+  return `Hi ${firstName}. Ask me anything about ${subject}, or pick a question below. ` +
     "I look things up with your own access rights and I can't change anything.";
 }
 
 function ContextName({ context }: { context: Context }) {
-  return context.type === 'alert' ? <>Alert {context.id}</> : <CaseLabel caseId={context.id} />;
+  if (context.type === 'alert') return <>Alert {context.id}</>;
+  if (context.type === 'case') return <CaseLabel caseId={context.id} />;
+  return <>{pageName(context.id)}</>;
 }
 
 let seq = 0;
@@ -127,11 +177,15 @@ export function FinCrissAgent() {
 
   if (!user || !context) return null;
 
-  const all = context.type === 'alert' ? alertQuickActions : caseQuickActions;
-  const quickActions = all.filter((qa) => qa.needs.every((p) => hasPermission(user, p)));
+  const can = (needs: string[]) => needs.every((p) => hasPermission(user, p));
+  const quickActions = context.type === 'alert' ? alertQuickActions.filter((qa) => can(qa.needs))
+    : context.type === 'case' ? caseQuickActions.filter((qa) => can(qa.needs)) : [];
+  const suggestions = context.type === 'page'
+    ? (PAGE_SUGGESTIONS[context.id] ?? DEFAULT_SUGGESTIONS).filter((q) => can(q.needs)) : [];
   const freeTextEnabled = conversation?.enabled ?? true;
 
   const ask = (label: string, action: AlertAction | CaseAction) => {
+    if (context.type === 'page') return;   // record quick actions only exist on alert and case pages
     setMessages((prev) => [
       ...prev,
       { id: nextId(), role: 'user', text: label },
@@ -190,7 +244,7 @@ export function FinCrissAgent() {
                 </div>
                 <div>
                   <SheetTitle className="text-base font-semibold">FinCrisS Agent</SheetTitle>
-                  <p className="text-xs text-muted-foreground">Answers from this record's data. Read-only.</p>
+                  <p className="text-xs text-muted-foreground">Answers with your access rights. Read-only.</p>
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -261,6 +315,16 @@ export function FinCrissAgent() {
           </ScrollArea>
 
           <div className="space-y-2 p-4 border-t border-border bg-background">
+            {suggestions.length > 0 && freeTextEnabled && (
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((q) => (
+                  <Button key={q.text} variant="outline" size="sm" className="h-auto min-h-7 whitespace-normal py-1 text-left text-xs"
+                          disabled={askAgent.isPending} onClick={() => handleSend(q.text)}>
+                    {q.text}
+                  </Button>
+                ))}
+              </div>
+            )}
             {quickActions.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {quickActions.map((qa) => (
@@ -275,7 +339,8 @@ export function FinCrissAgent() {
               <Input
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder={freeTextEnabled ? 'Ask about this record…' : 'Free-text questions are switched off'}
+                placeholder={!freeTextEnabled ? 'Free-text questions are switched off'
+                  : context.type === 'page' ? 'Ask about your work…' : 'Ask about this record…'}
                 disabled={!freeTextEnabled || askAgent.isPending}
                 maxLength={1000}
                 className="flex-1"

@@ -88,7 +88,7 @@ export function AgentTextAnswer({ text, sources, toolsUsed }: {
           )}
         </div>
       )}
-      <p className="text-[11px] text-muted-foreground">AI-generated from this record's data. Check before relying on it.</p>
+      <p className="text-[11px] text-muted-foreground">AI-generated from FinCrisS data you can access. Check before relying on it.</p>
     </div>
   );
 }

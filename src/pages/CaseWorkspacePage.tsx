@@ -130,8 +130,17 @@ export default function CaseWorkspacePage() {
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <AlertCircle className="h-12 w-12 text-destructive" />
           <div className="text-center">
-            <h2 className="text-xl font-bold">Case Not Found</h2>
-            <p className="text-muted-foreground">The case ID might be invalid or has been deleted.</p>
+            {(error as any)?.response?.status === 403 ? (
+              <>
+                <h2 className="text-xl font-bold">You don't have access to view this</h2>
+                <p className="text-muted-foreground">This case isn't in your scope.</p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold">Case Not Found</h2>
+                <p className="text-muted-foreground">The case ID might be invalid or has been deleted.</p>
+              </>
+            )}
           </div>
           <Button onClick={() => navigate('/cases')}>
             <ArrowLeft className="mr-2 h-4 w-4" />

@@ -84,6 +84,14 @@ export function useAssignAlert() {
   });
 }
 
+export function useAlertAssignees(enabled = true) {
+  return useQuery({
+    queryKey: ['alert-assignees'],
+    queryFn: () => alertsService.listAssignees(),
+    enabled,
+  });
+}
+
 export function useUsers(params: any = {}) {
   return useQuery({
     queryKey: ['users', params],

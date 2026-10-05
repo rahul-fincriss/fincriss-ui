@@ -38,8 +38,24 @@ export const alertsService = {
       riskDrivers: alert.risk_drivers || alert.riskDrivers || [],
       slaDeadline: new Date(alert.sla_deadline || Date.now() + 86400000),
       rawPayload: alert.raw_payload || {},
+      alertDate: alert.alert_date ? new Date(alert.alert_date) : undefined,
       assignedTo: alert.assigned_to_username || alert.assigned_to,
       workflowStatus: alert.workflow_status,
+    }));
+  },
+
+  // People an alert can be assigned to (alerts:assign). Same shape as the user list so
+  // existing assignment UI works unchanged.
+  async listAssignees(): Promise<any[]> {
+    const { data } = await api.get('/api/alerts/assignees');
+    return (data.assignees || []).map((u: any) => ({
+      id: String(u.user_id),
+      name: u.full_name || u.username,
+      username: u.username,
+      email: '',
+      role: u.role,
+      roles: [u.role],
+      status: 'active',
     }));
   },
 

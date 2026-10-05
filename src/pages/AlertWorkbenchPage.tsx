@@ -41,7 +41,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { RiskBadge } from '@/components/shared/RiskBadge';
-import { SLATimer } from '@/components/shared/SLATimer';
 import { PrioritizedAlert, RiskLevel, UserPriority, CustomerGroupOverrides, WorkbenchAuditEntry, User, WorkflowStatus } from '@/types';
 import { toast } from 'sonner';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -50,7 +49,9 @@ import { AuditPanel } from '@/components/workbench/AuditPanel';
 import { AnalystAssignmentDropdown } from '@/components/workbench/AnalystAssignmentDropdown';
 import { RawAlertDrawer } from '@/components/workbench/RawAlertDrawer';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { useAlerts, useUsers, useOpenCase, useAssignAlert } from '@/hooks/useAlerts';
+import { useAlerts, useAlertAssignees, useOpenCase, useAssignAlert } from '@/hooks/useAlerts';
+import { canAssignAlerts } from '@/lib/permissions';
+import { formatDistanceToNowStrict } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 
 const alertTypeLabels: Record<string, string> = {
@@ -72,7 +73,7 @@ interface CustomerGroup {
   minScore: number;
   priorityBreakdown: { high: number; medium: number; low: number };
   aggregatedDrivers: string[];
-  earliestSLA: Date;
+  oldestAlertDate?: Date;
 }
 
 const priorityOrder: Record<RiskLevel, number> = { high: 3, medium: 2, low: 1 };
@@ -91,7 +92,7 @@ function groupAlertsByCustomer(alerts: PrioritizedAlert[]): CustomerGroup[] {
     let maxPriority: RiskLevel = 'low';
     let maxScore = 0;
     let minScore = 100;
-    let earliestSLA = customerAlerts[0].slaDeadline;
+    let oldestAlertDate: Date | undefined;
     const allDrivers: string[] = [];
 
     customerAlerts.forEach((alert) => {
@@ -101,7 +102,7 @@ function groupAlertsByCustomer(alerts: PrioritizedAlert[]): CustomerGroup[] {
       }
       if (alert.mapsScore > maxScore) maxScore = alert.mapsScore;
       if (alert.mapsScore < minScore) minScore = alert.mapsScore;
-      if (alert.slaDeadline < earliestSLA) earliestSLA = alert.slaDeadline;
+      if (alert.alertDate && (!oldestAlertDate || alert.alertDate < oldestAlertDate)) oldestAlertDate = alert.alertDate;
       allDrivers.push(...alert.riskDrivers);
     });
 
@@ -124,32 +125,43 @@ function groupAlertsByCustomer(alerts: PrioritizedAlert[]): CustomerGroup[] {
       minScore,
       priorityBreakdown,
       aggregatedDrivers,
-      earliestSLA,
+      oldestAlertDate,
     };
   });
 
   return groups;
 }
 
+// Real SLAs come with Phase 11 settings; until then show how old the alert is.
+function AlertAge({ date }: { date?: Date }) {
+  if (!date) return <span className="text-xs text-muted-foreground">—</span>;
+  return <span className="text-xs text-muted-foreground">{formatDistanceToNowStrict(date)}</span>;
+}
+
 export default function AlertWorkbenchPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  // Real API data
-  const { data: alertsData, isLoading: alertsLoading, error: alertsError } = useAlerts();
-  const { data: usersData, isLoading: usersLoading } = useUsers();
+  // Filters can be preset from the URL (dashboard tiles link here, e.g. ?priority=high&analyst=Name).
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || 'all');
+
+  // The server returns only alerts this user can see. By default those are open alerts;
+  // escalated / dismissed ones are no longer open, so the server is asked for them explicitly.
+  const terminalStatus = statusFilter === 'ESCALATED' || statusFilter === 'DISMISSED';
+  const { data: alertsData, isLoading: alertsLoading, error: alertsError } =
+    useAlerts(terminalStatus ? { workflow_status: statusFilter } : {});
+  const canAssign = canAssignAlerts(user);
+  const { data: usersData, isLoading: usersLoading } = useAlertAssignees(canAssign);
   const openCaseMutation = useOpenCase();
   const assignAlertMutation = useAssignAlert();
   
   const alerts = alertsData || [];
   const analysts = usersData || [];
-  const isLoading = alertsLoading || usersLoading;
+  const isLoading = alertsLoading || (canAssign && usersLoading);
 
-  // Filters can be preset from the URL (dashboard tiles link here, e.g. ?priority=high&analyst=Name).
-  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState<string>(searchParams.get('priority') || 'all');
-  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || 'all');
   const [analystFilter, setAnalystFilter] = useState<string>(searchParams.get('analyst') || 'all');
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
   
@@ -180,7 +192,8 @@ export default function AlertWorkbenchPage() {
     isReassignment?: boolean;
   } | null>(null);
 
-  const canEdit = user?.role === 'analyst' || user?.role === 'super_admin';
+  // Assigning needs alerts:assign (triage manager, investigator, super admin); analysts see the owner only.
+  const canEdit = canAssign;
 
   const addAuditEntry = useCallback((customerId: string, entry: Omit<WorkbenchAuditEntry, 'id' | 'performedAt'>) => {
     setAuditLog((prev) => {
@@ -300,11 +313,11 @@ export default function AlertWorkbenchPage() {
       groups = groups.filter((group) => group.maxPriority === priorityFilter);
     }
 
-    // Sort by FinCrisS priority, then SLA
+    // Sort by FinCrisS priority, then oldest alert first
     groups.sort((a, b) => {
       const priorityDiff = priorityOrder[b.maxPriority] - priorityOrder[a.maxPriority];
       if (priorityDiff !== 0) return priorityDiff;
-      return a.earliestSLA.getTime() - b.earliestSLA.getTime();
+      return (a.oldestAlertDate?.getTime() ?? Infinity) - (b.oldestAlertDate?.getTime() ?? Infinity);
     });
 
     return groups;
@@ -405,7 +418,7 @@ export default function AlertWorkbenchPage() {
           <div>
             <h1 className="text-2xl font-bold">Alert Workbench</h1>
             <p className="text-muted-foreground">
-              Customer-grouped alerts with AI prioritization, user overrides, and SLA tracking
+              Customer-grouped alerts with AI prioritization and user overrides
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -497,7 +510,7 @@ export default function AlertWorkbenchPage() {
                 <TableHead>FinCrisS Priority</TableHead>
                 <TableHead className="w-[140px]">Status</TableHead>
                 <TableHead className="w-[160px]">Owner</TableHead>
-                <TableHead>SLA</TableHead>
+                <TableHead>Age</TableHead>
                {/*} <TableHead className="text-right">Actions</TableHead>*/}
               </TableRow>
             </TableHeader>
@@ -627,7 +640,7 @@ export default function AlertWorkbenchPage() {
                               )}
                             </TableCell>
                             <TableCell>
-                              <SLATimer deadline={group.earliestSLA} />
+                              <AlertAge date={group.oldestAlertDate} />
                             </TableCell>
                             {/*}
                             <TableCell>
@@ -741,7 +754,7 @@ export default function AlertWorkbenchPage() {
                                     )}
                                   </TableCell>
                                   <TableCell>
-                                    <SLATimer deadline={alert.slaDeadline} />
+                                    <AlertAge date={alert.alertDate} />
                                   </TableCell>
                                   {/*}
                                   <TableCell>

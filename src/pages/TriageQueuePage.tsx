@@ -15,7 +15,7 @@ import {
 import { RiskBadge } from '@/components/shared/RiskBadge';
 import { useAuth } from '@/contexts/AuthContext';
 import { canAssignAlerts } from '@/lib/permissions';
-import { useUnassignedQueue, useWorkload, useBulkAssign, useUsers } from '@/hooks/useAlerts';
+import { useUnassignedQueue, useWorkload, useBulkAssign, useAlertAssignees } from '@/hooks/useAlerts';
 import { formatINRFull } from '@/lib/formatters';
 import { format } from 'date-fns';
 
@@ -31,7 +31,7 @@ export default function TriageQueuePage() {
   const queueParams = priorityFilter === 'all' ? {} : { priority_level: priorityFilter };
   const { data: queue = [], isLoading, error } = useUnassignedQueue(queueParams);
   const { data: workload = [] } = useWorkload();
-  const { data: users = [] } = useUsers();
+  const { data: users = [] } = useAlertAssignees();
   const bulkAssign = useBulkAssign();
 
   // Candidate assignees: active users who work alerts.

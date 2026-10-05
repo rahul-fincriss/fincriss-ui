@@ -24,7 +24,15 @@ import WorkforceManagementPage from "./pages/WorkforceManagementPage";
 import SettingsPage from "./pages/SettingsPage";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+// Don't retry requests the server has refused or can't find (e.g. a record outside your scope).
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error: any) =>
+        ![403, 404].includes(error?.response?.status) && failureCount < 3,
+    },
+  },
+});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();

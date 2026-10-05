@@ -147,8 +147,17 @@ export default function AlertDetailsPage() {
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <XCircle className="h-12 w-12 text-destructive" />
           <div className="text-center">
-            <h2 className="text-xl font-bold">Alert Not Found</h2>
-            <p className="text-muted-foreground">The alert ID might be invalid or you don't have permission to view it.</p>
+            {(error as any)?.response?.status === 403 ? (
+              <>
+                <h2 className="text-xl font-bold">You don't have access to view this</h2>
+                <p className="text-muted-foreground">This alert isn't assigned to you.</p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold">Alert Not Found</h2>
+                <p className="text-muted-foreground">The alert ID might be invalid.</p>
+              </>
+            )}
           </div>
           <Button onClick={() => navigate('/alerts/workbench')}>
             <ArrowLeft className="mr-2 h-4 w-4" />

@@ -102,3 +102,23 @@ describe('alert detail for the FinCrisS Agent', () => {
     expect(a.rawData).toEqual({ channel: 'SWIFT', scenario: 'DORMANT' });
   });
 });
+
+describe('record visibility support', () => {
+  it('lists alert assignees in the user shape the assignment UI expects', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { assignees: [{ user_id: 5, username: 'analyst1', full_name: 'Arjun Mehta', role: 'analyst' }] },
+    });
+    const list = await alertsService.listAssignees();
+    expect(mockGet).toHaveBeenCalledWith('/api/alerts/assignees');
+    expect(list[0]).toMatchObject({ id: '5', name: 'Arjun Mehta', role: 'analyst', roles: ['analyst'], status: 'active' });
+  });
+
+  it('maps the alert date for the workbench age column', async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { alerts: [{ alert_id: 'ALT1', alert_date: '2026-04-06T00:00:00', priority_level: 'HIGH' }] },
+    });
+    const [a] = await alertsService.listAlerts({ workflow_status: 'ESCALATED' } as any);
+    expect(mockGet).toHaveBeenCalledWith('/api/alerts/open', { params: { workflow_status: 'ESCALATED' } });
+    expect(a.alertDate).toBeInstanceOf(Date);
+  });
+});

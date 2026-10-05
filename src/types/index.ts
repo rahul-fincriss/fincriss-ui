@@ -44,6 +44,7 @@ export interface PrioritizedAlert extends RawAlert {
   riskLevel: RiskLevel;
   riskDrivers: string[];
   slaDeadline: Date;
+  alertDate?: Date;
   assignedTo?: string;
   workflowStatus?: WorkflowStatus;
   userPriority?: UserPriority;

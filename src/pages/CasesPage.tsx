@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Eye, FileCheck, Search, SortAsc, SortDesc, Loader2, AlertCircle } from 'lucide-react';
 import { useCases } from '@/hooks/useCases';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -52,7 +52,8 @@ export default function CasesPage() {
   const cases = useMemo(() => casesData || [], [casesData]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchParams] = useSearchParams();
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || 'all');
   const [strStatusFilter, setStrStatusFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');

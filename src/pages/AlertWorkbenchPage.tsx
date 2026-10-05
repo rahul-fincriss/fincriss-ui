@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   ChevronDown, 
   ChevronRight, 
@@ -145,10 +145,12 @@ export default function AlertWorkbenchPage() {
   const analysts = usersData || [];
   const isLoading = alertsLoading || usersLoading;
 
+  // Filters can be preset from the URL (dashboard tiles link here, e.g. ?priority=high&analyst=Name).
+  const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [analystFilter, setAnalystFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>(searchParams.get('priority') || 'all');
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || 'all');
+  const [analystFilter, setAnalystFilter] = useState<string>(searchParams.get('analyst') || 'all');
   const [expandedCustomers, setExpandedCustomers] = useState<Set<string>>(new Set());
   
   // Customer-level overrides
@@ -469,6 +471,11 @@ export default function AlertWorkbenchPage() {
             <SelectContent>
               <SelectItem value="all">All Analysts</SelectItem>
               <SelectItem value="unassigned">Unassigned</SelectItem>
+              {/* Users without users:read get no analyst list; still show a URL-preset name. */}
+              {analystFilter !== 'all' && analystFilter !== 'unassigned' &&
+                !analysts.some((a: any) => a.name === analystFilter) && (
+                <SelectItem value={analystFilter}>{analystFilter}</SelectItem>
+              )}
               {analysts.map((analyst: any) => (
                 <SelectItem key={analyst.id} value={analyst.name}>
                   {analyst.name}

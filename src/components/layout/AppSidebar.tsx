@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -28,6 +29,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Badge } from '@/components/ui/badge';
@@ -41,80 +43,104 @@ interface NavItem {
   badge?: string;
 }
 
-const navItems: NavItem[] = [
+interface NavSection {
+  label?: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
   {
-    title: 'Dashboard',
-    url: '/dashboard',
-    icon: LayoutDashboard,
-    roles: ['analyst', 'investigator', 'principal_officer', 'compliance', 'super_admin'],
+    items: [
+      {
+        title: 'Dashboard',
+        url: '/dashboard',
+        icon: LayoutDashboard,
+        roles: ['analyst', 'investigator', 'principal_officer', 'compliance', 'super_admin'],
+      },
+    ],
   },
   {
-    title: 'Alert Workbench',
-    url: '/alerts/workbench',
-    icon: Zap,
-    roles: ['analyst', 'investigator', 'super_admin'],
-    badge: '12',
+    label: 'Alerts & Cases',
+    items: [
+      {
+        title: 'Alert Workbench',
+        url: '/alerts/workbench',
+        icon: Zap,
+        roles: ['analyst', 'investigator', 'super_admin'],
+        badge: '12',
+      },
+      {
+        title: 'Triage Queue',
+        url: '/triage',
+        icon: Inbox,
+        roles: ['triage_manager', 'investigator', 'super_admin'],
+      },
+      {
+        title: 'Customer 360',
+        url: '/customers',
+        icon: UserSearch,
+        roles: ['analyst', 'investigator', 'principal_officer', 'compliance', 'super_admin'],
+      },
+      {
+        title: 'Cases',
+        url: '/cases',
+        icon: FolderOpen,
+        roles: ['investigator', 'principal_officer', 'compliance', 'super_admin'],
+        badge: '8',
+      },
+      {
+        title: 'STR Reports',
+        url: '/str',
+        icon: FileText,
+        roles: ['investigator', 'principal_officer', 'compliance', 'super_admin'],
+      },
+    ],
   },
   {
-    title: 'Triage Queue',
-    url: '/triage',
-    icon: Inbox,
-    roles: ['triage_manager', 'investigator', 'super_admin'],
+    label: 'Audit & Compliance',
+    items: [
+      {
+        title: 'Audit Trail',
+        url: '/audit',
+        icon: History,
+        roles: ['compliance', 'super_admin'],
+      },
+    ],
   },
   {
-    title: 'Customer 360',
-    url: '/customers',
-    icon: UserSearch,
-    roles: ['analyst', 'investigator', 'principal_officer', 'compliance', 'super_admin'],
-  },
-  {
-    title: 'Cases',
-    url: '/cases',
-    icon: FolderOpen,
-    roles: ['investigator', 'principal_officer', 'compliance', 'super_admin'],
-    badge: '8',
-  },
-  {
-    title: 'STR Reports',
-    url: '/str',
-    icon: FileText,
-    roles: ['investigator', 'principal_officer', 'compliance', 'super_admin'],
-  },
-  {
-    title: 'Audit Trail',
-    url: '/audit',
-    icon: History,
-    roles: ['compliance', 'super_admin'],
-  },
-  {
-    title: 'Model Governance',
-    url: '/ml-status',
-    icon: ShieldCheck,
-    roles: ['super_admin', 'principal_officer', 'compliance'],
-  },
-  {
-    title: 'Reference Data',
-    url: '/reference-data',
-    icon: Database,
-    roles: ['super_admin', 'compliance'],
-  },
-  {
-    title: 'Rules Engine',
-    url: '/rules-engine',
-    icon: Shield,
-    roles: ['super_admin'],
-  },
-  {
-    title: 'Workforce Management',
-    url: '/workforce',
-    icon: UsersRound,
-    roles: ['super_admin', 'compliance'],
-  },
-  {
-    title: 'Settings',
-    url: '/settings',
-    icon: Settings,
-    roles: ['super_admin', 'compliance'],
+    label: 'Configuration',
+    items: [
+      {
+        title: 'Reference Data',
+        url: '/reference-data',
+        icon: Database,
+        roles: ['super_admin', 'compliance'],
+      },
+      {
+        title: 'Rules Engine',
+        url: '/rules-engine',
+        icon: Shield,
+        roles: ['super_admin'],
+      },
+      {
+        title: 'Model Governance',
+        url: '/ml-status',
+        icon: ShieldCheck,
+        roles: ['super_admin', 'principal_officer', 'compliance'],
+      },
+      {
+        title: 'Workforce Management',
+        url: '/workforce',
+        icon: UsersRound,
+        roles: ['super_admin', 'compliance'],
+      },
+      {
+        title: 'General Settings',
+        url: '/settings',
+        icon: Settings,
+        roles: ['super_admin', 'compliance'],
+      },
+    ],
   },
 ];
 
@@ -125,9 +151,13 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const isCollapsed = state === 'collapsed';
 
-  const filteredNavItems = navItems.filter(
-    (item) => user && item.roles.includes(user.role)
-  );
+  // Sections with nothing visible for this role are dropped entirely.
+  const visibleSections = navSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => user && item.roles.includes(user.role)),
+    }))
+    .filter((section) => section.items.length > 0);
 
   const handleLogoClick = () => {
     navigate('/dashboard');
@@ -157,48 +187,53 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {filteredNavItems.map((item) => {
-                const isActive = location.pathname === item.url;
-                return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      tooltip={item.title}
-                    >
-                      <a
-                        href={item.url}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          navigate(item.url);
-                        }}
-                        className={cn(
-                          'flex items-center gap-3',
-                          isActive && 'bg-sidebar-accent'
-                        )}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span className="flex-1">{item.title}</span>
-                        {item.badge && !isCollapsed && (
-                          <Badge
-                            variant="secondary"
-                            className="ml-auto h-5 min-w-5 justify-center bg-primary/20 text-primary"
+        {visibleSections.map((section, index) => (
+          <Fragment key={section.label ?? 'top'}>
+            {index > 0 && <SidebarSeparator />}
+            <SidebarGroup>
+              {section.label && <SidebarGroupLabel>{section.label}</SidebarGroupLabel>}
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {section.items.map((item) => {
+                    const isActive = location.pathname === item.url;
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={isActive}
+                          tooltip={item.title}
+                        >
+                          <a
+                            href={item.url}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              navigate(item.url);
+                            }}
+                            className={cn(
+                              'flex items-center gap-3',
+                              isActive && 'bg-sidebar-accent'
+                            )}
                           >
-                            {item.badge}
-                          </Badge>
-                        )}
-                      </a>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                            <item.icon className="h-4 w-4" />
+                            <span className="flex-1">{item.title}</span>
+                            {item.badge && !isCollapsed && (
+                              <Badge
+                                variant="secondary"
+                                className="ml-auto h-5 min-w-5 justify-center bg-primary/20 text-primary"
+                              >
+                                {item.badge}
+                              </Badge>
+                            )}
+                          </a>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </Fragment>
+        ))}
       </SidebarContent>
     </Sidebar>
   );

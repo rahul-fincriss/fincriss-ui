@@ -11,7 +11,7 @@ const routeLabels: Record<string, string> = {
   audit: 'Audit Trail',
   mlops: 'ML Ops',
   workforce: 'Workforce Management',
-  settings: 'Settings',
+  settings: 'General Settings',
 };
 
 export function Breadcrumbs() {

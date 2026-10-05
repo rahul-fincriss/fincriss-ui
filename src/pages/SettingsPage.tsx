@@ -32,7 +32,7 @@ export default function SettingsPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+            <h1 className="text-2xl font-bold text-foreground">General Settings</h1>
             <p className="text-muted-foreground">
               Configure platform-wide settings and defaults
             </p>

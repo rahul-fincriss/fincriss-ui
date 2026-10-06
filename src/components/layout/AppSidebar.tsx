@@ -32,7 +32,6 @@ import {
   SidebarSeparator,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { Badge } from '@/components/ui/badge';
 import { ThemedLogo } from '@/components/shared/ThemedLogo';
 
 interface NavItem {
@@ -40,7 +39,6 @@ interface NavItem {
   url: string;
   icon: React.ElementType;
   roles: UserRole[];
-  badge?: string;
 }
 
 interface NavSection {
@@ -67,7 +65,6 @@ const navSections: NavSection[] = [
         url: '/alerts/workbench',
         icon: Zap,
         roles: ['analyst', 'investigator', 'super_admin'],
-        badge: '12',
       },
       {
         title: 'Triage Queue',
@@ -86,7 +83,6 @@ const navSections: NavSection[] = [
         url: '/cases',
         icon: FolderOpen,
         roles: ['investigator', 'principal_officer', 'compliance', 'super_admin'],
-        badge: '8',
       },
       {
         title: 'STR Reports',
@@ -216,14 +212,6 @@ export function AppSidebar() {
                           >
                             <item.icon className="h-4 w-4" />
                             <span className="flex-1">{item.title}</span>
-                            {item.badge && !isCollapsed && (
-                              <Badge
-                                variant="secondary"
-                                className="ml-auto h-5 min-w-5 justify-center bg-primary/20 text-primary"
-                              >
-                                {item.badge}
-                              </Badge>
-                            )}
                           </a>
                         </SidebarMenuButton>
                       </SidebarMenuItem>

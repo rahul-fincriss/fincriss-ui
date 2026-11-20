@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **Project status lives in `../IMPLEMENTATION_PLAN.md`** (workspace root): what's built, what's next, deploy state. It is stored in the sibling backend repo (`../fincriss-bcknd/docs/workspace/`) and symlinked to the root. If it's missing on a fresh machine, clone `fincriss-bcknd` next to this repo and run `bash ../fincriss-bcknd/docs/workspace/setup-workspace.sh`.
+
 ## Commands
 
 ```bash
